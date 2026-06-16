@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build",
+    "build:ci": "vite build",
+    "build:frontend": "node scripts/build-frontend.mjs",
     "preview": "vite preview",
     "tauri": "npx tauri"
   },

@@ -1,8 +1,7 @@
-# 发版：先确保 workflow 已 push 到 main，再打新标签
-#   git tag v1.0.1
-#   git push origin v1.0.1
+# 发版：workflow 先 push 到 main，再打新标签
+#   git tag v1.0.1 && git push origin v1.0.1
 #
-# 注意：标签指向的 commit 必须包含本文件；旧标签重跑仍会使用旧 workflow。
+# 三端并行构建，但 Release 只上传一次，避免 GitHub API secondary rate limit。
 
 name: Release
 
@@ -13,18 +12,21 @@ on:
   workflow_dispatch:
 
 jobs:
-  release:
+  build:
     permissions:
-      contents: write
+      contents: read
     strategy:
       fail-fast: false
       matrix:
         include:
           - platform: windows-latest
+            artifact: bundle-windows
             args: ""
           - platform: macos-latest
+            artifact: bundle-macos
             args: "--target aarch64-apple-darwin"
           - platform: ubuntu-22.04
+            artifact: bundle-linux
             args: ""
 
     runs-on: ${{ matrix.platform }}
@@ -67,9 +69,31 @@ jobs:
       - name: Build Tauri app
         run: npx tauri build ${{ matrix.args }}
         env:
+          CI: true
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
-      - name: Upload to GitHub Release
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: src-tauri/target/release/bundle/
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all platform bundles
+        uses: actions/download-artifact@v4
+        with:
+          path: bundles
+          merge-multiple: true
+
+      - name: Create GitHub Release (single upload)
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
@@ -77,5 +101,4 @@ jobs:
           draft: true
           generate_release_notes: true
           fail_on_unmatched_files: false
-          files: |
-            src-tauri/target/release/bundle/**/*
+          files: bundles/**/*
