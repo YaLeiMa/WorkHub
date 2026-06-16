@@ -27,10 +27,10 @@ jobs:
       contents: write
 
     steps:
+      # checkout main（不是 tag），供 gh --generate-notes 使用；tag 不存在时也能跑
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ inputs.tag }}
 
       - name: Download artifacts from previous run
         uses: actions/download-artifact@v4
@@ -86,6 +86,14 @@ jobs:
           echo "Uploading ${#FILES[@]} file(s) to release $TAG"
           printf '  - %s\n' "${FILES[@]}"
 
+          git fetch --tags --force
+
+          TARGET_ARGS=()
+          if ! git rev-parse "refs/tags/$TAG^{commit}" >/dev/null 2>&1; then
+            echo "Tag $TAG not found on remote, will create tag on main"
+            TARGET_ARGS=(--target main)
+          fi
+
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "Removing existing release $TAG (keeping tag)"
             gh release delete "$TAG" --yes --cleanup-tag=false
@@ -94,4 +102,5 @@ jobs:
           gh release create "$TAG" "${FILES[@]}" \
             --draft \
             --title "WorkHub $TAG" \
-            --generate-notes
+            --generate-notes \
+            "${TARGET_ARGS[@]}"
