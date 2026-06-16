@@ -24,7 +24,7 @@ jobs:
             args: ""
           - platform: macos-latest
             artifact: bundle-macos
-            args: "--target aarch64-apple-darwin"
+            args: ""
           - platform: ubuntu-22.04
             artifact: bundle-linux
             args: ""
@@ -42,8 +42,6 @@ jobs:
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin' || '' }}
 
       - name: Rust cache
         uses: swatinem/rust-cache@v2
@@ -73,11 +71,24 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
+      - name: Locate bundle output
+        id: bundle
+        shell: bash
+        run: |
+          BUNDLE=$(find src-tauri/target -path '*/release/bundle' -type d 2>/dev/null | head -1)
+          if [ -z "$BUNDLE" ]; then
+            echo "Bundle directory not found. Contents of src-tauri/target:"
+            find src-tauri/target -maxdepth 4 -type d 2>/dev/null || true
+            exit 1
+          fi
+          echo "Found bundle at: $BUNDLE"
+          echo "path=$BUNDLE" >> "$GITHUB_OUTPUT"
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: src-tauri/target/release/bundle/
+          path: ${{ steps.bundle.outputs.path }}
           if-no-files-found: error
 
   release:
