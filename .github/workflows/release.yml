@@ -57,7 +57,9 @@ jobs:
             patchelf
 
       - name: Install frontend dependencies
-        run: npm ci
+        run: |
+          npm install
+          npx tauri --version
 
       - name: Build and release
         uses: tauri-apps/tauri-action@v0.6.2
@@ -66,6 +68,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
+          tauriScript: npx tauri
           tagName: v__VERSION__
           releaseName: WorkHub v__VERSION__
           releaseBody: |
