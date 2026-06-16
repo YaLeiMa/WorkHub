@@ -33,7 +33,6 @@ function detectMode(): WindowLabel {
   }
 
   setWindowLabel('main')
-
   return 'main'
 }
 
