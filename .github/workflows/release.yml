@@ -51,6 +51,7 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
+          cache-on-failure: true
 
       - name: Install Linux dependencies
         if: matrix.platform == 'ubuntu-22.04'
@@ -65,10 +66,21 @@ jobs:
 
       - name: Install frontend dependencies
         run: |
-          npm install
+          npm ci
           npx tauri --version
 
+      - name: Build Tauri app (Windows, fast CI profile)
+        if: matrix.platform == 'windows-latest'
+        run: npx tauri build
+        env:
+          CI: true
+          CARGO_PROFILE_RELEASE_LTO: "false"
+          CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
       - name: Build Tauri app
+        if: matrix.platform != 'windows-latest'
         run: npx tauri build ${{ matrix.args }}
         env:
           CI: true
@@ -137,13 +149,13 @@ jobs:
 
           echo "Uploading ${#FILES[@]} file(s) to release $TAG"
 
+          # 删除已有 Release（保留 git tag），避免 --clobber 删除单个 asset 时 404
           if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "Release exists, upload with --clobber"
-            gh release upload "$TAG" "${FILES[@]}" --clobber
-          else
-            echo "Creating draft release"
-            gh release create "$TAG" "${FILES[@]}" \
-              --draft \
-              --title "WorkHub $TAG" \
-              --generate-notes
+            echo "Removing existing release $TAG (keeping tag)"
+            gh release delete "$TAG" --yes --cleanup-tag=false
           fi
+
+          gh release create "$TAG" "${FILES[@]}" \
+            --draft \
+            --title "WorkHub $TAG" \
+            --generate-notes

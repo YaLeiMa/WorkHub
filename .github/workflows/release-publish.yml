@@ -1,0 +1,74 @@
+# 仅发布：复用某次已成功 build 的 artifacts，无需重新编译（约 1 分钟）
+#
+# 用法：
+# 1. 打开 Actions 里 build 已全部成功的 run
+# 2. URL 末尾数字即 run_id，例如 .../actions/runs/12345678901
+# 3. Actions → Publish Release → Run workflow
+#    - run_id: 12345678901
+#    - tag: v1.0.1
+
+name: Publish Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "已成功 build 的 Run ID（Actions URL 末尾数字）"
+        required: true
+      tag:
+        description: "Release tag，如 v1.0.1"
+        required: true
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
+
+    steps:
+      - name: Download artifacts from previous run
+        uses: actions/download-artifact@v4
+        with:
+          path: bundles
+          merge-multiple: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ inputs.run_id }}
+
+      - name: Validate tag
+        id: tag
+        run: |
+          TAG="${{ inputs.tag }}"
+          if [[ ! "$TAG" =~ ^v[0-9] ]]; then
+            echo "::error::Invalid tag: $TAG"
+            exit 1
+          fi
+          echo "name=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: List bundle files
+        run: |
+          find bundles -type f -print
+          COUNT=$(find bundles -type f | wc -l)
+          if [ "$COUNT" -eq 0 ]; then
+            echo "::error::No files downloaded. Check run_id has bundle-windows/macos/linux artifacts."
+            exit 1
+          fi
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.tag.outputs.name }}"
+
+          mapfile -t FILES < <(find bundles -type f)
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Removing existing release $TAG (keeping tag)"
+            gh release delete "$TAG" --yes --cleanup-tag=false
+          fi
+
+          gh release create "$TAG" "${FILES[@]}" \
+            --draft \
+            --title "WorkHub $TAG" \
+            --generate-notes
