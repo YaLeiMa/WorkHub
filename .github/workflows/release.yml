@@ -1,10 +1,8 @@
-# 推送 v* 标签时，在 Windows / macOS / Linux 上分别构建并发布到 GitHub Releases。
+# 发版：先确保 workflow 已 push 到 main，再打新标签
+#   git tag v1.0.1
+#   git push origin v1.0.1
 #
-# 首次使用前请在 GitHub 仓库 Settings → Secrets and variables → Actions 中配置：
-#   TAURI_SIGNING_PRIVATE_KEY          — tauri signer generate 生成的私钥内容
-#   TAURI_SIGNING_PRIVATE_KEY_PASSWORD — 生成密钥时设置的密码（无密码可留空或不建）
-#
-# 发版：git tag v1.0.1 && git push origin v1.0.1
+# 注意：标签指向的 commit 必须包含本文件；旧标签重跑仍会使用旧 workflow。
 
 name: Release
 
@@ -37,13 +35,18 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: lts/*
+          node-version: 20
           cache: npm
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin' || '' }}
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
 
       - name: Install Linux dependencies
         if: matrix.platform == 'ubuntu-22.04'
@@ -61,21 +64,18 @@ jobs:
           npm install
           npx tauri --version
 
-      - name: Build and release
-        uses: tauri-apps/tauri-action@v0.6.2
+      - name: Build Tauri app
+        run: npx tauri build ${{ matrix.args }}
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          tauriScript: npx tauri
-          tagName: v__VERSION__
-          releaseName: WorkHub v__VERSION__
-          releaseBody: |
-            见下方 Assets 下载对应平台的安装包。
-            - Windows: `WorkHub_*_x64-setup.exe`
-            - macOS: `WorkHub_*_aarch64.dmg`
-            - Linux: `WorkHub_*_amd64.deb` / `WorkHub_*_amd64.AppImage`
-          releaseDraft: true
-          prerelease: false
-          args: ${{ matrix.args }}
+          tag_name: ${{ github.ref_name }}
+          name: WorkHub ${{ github.ref_name }}
+          draft: true
+          generate_release_notes: true
+          fail_on_unmatched_files: false
+          files: |
+            src-tauri/target/release/bundle/**/*
