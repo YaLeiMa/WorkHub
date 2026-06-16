@@ -1,0 +1,140 @@
+@import "tailwindcss";
+
+@source "./**/*.{vue,ts,js}";
+@source "../index.html";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * WorkHub 设计 token —— 严格遵守《WorkHub UI 设计规范》§2
+ * 颜色一律语义命名，禁止页面内写裸十六进制。
+ */
+@theme {
+  /* 颜色 */
+  --color-bg: #f5f6f8;
+  --color-surface: #ffffff;
+  --color-surface-hover: #f0f2f5;
+  --color-surface-active: #e8f0fe;
+  --color-border: #e5e7eb;
+  --color-text: #1f2329;
+  --color-text-secondary: #646a73;
+  --color-text-placeholder: #9aa0a6;
+  --color-primary: #3370ff;
+  --color-primary-hover: #245bdb;
+  --color-success: #2ba471;
+  --color-warning: #d99100;
+  --color-danger: #d54941;
+  --color-danger-hover: #b23a33;
+
+  /* 字体：Noto Sans SC 覆盖中文，Noto Sans 覆盖拉丁字符 */
+  --font-sans: "Noto Sans SC", "Noto Sans", sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Code", Consolas, monospace;
+
+  /* 圆角 */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+
+  /* 阴影 */
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04), 0 2px 8px rgba(0, 0, 0, 0.04);
+  --shadow-pop: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+/* 深色主题：只翻转底/面/文字三组，主色提亮，不改语义色相 */
+.dark {
+  --color-bg: #1b1c1e;
+  --color-surface: #26282b;
+  --color-surface-hover: #2f3236;
+  --color-surface-active: #2a3a5c;
+  --color-border: #3a3d42;
+  --color-text: #e8eaed;
+  --color-text-secondary: #9aa0a6;
+  --color-text-placeholder: #6b7075;
+  --color-primary: #4d82ff;
+  --color-primary-hover: #6a98ff;
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  html,
+  body,
+  #app {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 22px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* 可见聚焦环（规范 §12 无障碍） */
+  :where(button, a, input, textarea, select, [tabindex]):focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(51, 112, 255, 0.35);
+    border-radius: var(--radius-md);
+  }
+
+  /* 复合输入框由外层 wh-field 绘制聚焦环，内层控件不再单独圆角/描边 */
+  .wh-field :where(input, textarea):focus-visible {
+    box-shadow: none;
+    border-radius: 0;
+  }
+
+  ::placeholder {
+    color: var(--color-text-placeholder);
+  }
+}
+
+/* 文本工具：与规范 §2.2 字号表一致 */
+@utility text-page-title {
+  font-size: 18px;
+  line-height: 26px;
+  font-weight: 600;
+}
+@utility text-section {
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 600;
+}
+@utility text-body {
+  font-size: 14px;
+  line-height: 22px;
+  font-weight: 400;
+}
+@utility text-caption {
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 400;
+}
+@utility text-mono {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+/* 滚动条克制样式 */
+@utility scroll-y {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}
+
+/* Toast 进入动效（规范 §2.6：淡入 + 上移 8px） */
+.wh-toast-enter-active,
+.wh-toast-leave-active {
+  transition: opacity 150ms ease-out, transform 150ms ease-out;
+}
+.wh-toast-enter-from,
+.wh-toast-leave-to {
+  opacity: 0;
+  transform: translateY(8px);
+}

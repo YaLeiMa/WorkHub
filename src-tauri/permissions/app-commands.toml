@@ -1,0 +1,44 @@
+[[permission]]
+identifier = "allow-open-in-vscode"
+description = "允许调用 open_in_vscode 命令"
+commands.allow = ["open_in_vscode"]
+
+[[permission]]
+identifier = "allow-open-local-path"
+description = "允许用系统默认程序打开本地文件/文件夹"
+commands.allow = ["open_local_path"]
+
+[[permission]]
+identifier = "allow-window-hide"
+description = "允许调用 window_hide 命令（隐藏到托盘）"
+commands.allow = ["window_hide"]
+
+[[permission]]
+identifier = "allow-window-always-on-top"
+description = "允许设置窗口置顶"
+commands.allow = ["window_set_always_on_top"]
+
+[[permission]]
+identifier = "allow-data-file-io"
+description = "允许读写用户选择的备份 JSON 文件"
+commands.allow = ["write_text_file", "read_text_file"]
+
+[[permission]]
+identifier = "allow-window-spotlight"
+description = "允许控制悬浮搜索窗"
+commands.allow = ["window_hide_spotlight", "window_show_spotlight"]
+
+[[permission]]
+identifier = "allow-window-main-show"
+description = "允许显示主窗口"
+commands.allow = ["window_show_main"]
+
+[[permission]]
+identifier = "allow-window-startup"
+description = "允许应用启动窗口策略"
+commands.allow = ["apply_startup_window", "sync_default_window_mode"]
+
+[[permission]]
+identifier = "allow-shortcut-reload"
+description = "允许重新注册全局快捷键"
+commands.allow = ["shortcut_reload"]
