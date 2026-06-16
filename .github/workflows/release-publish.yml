@@ -27,6 +27,11 @@ jobs:
       contents: write
 
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.tag }}
+
       - name: Download artifacts from previous run
         uses: actions/download-artifact@v4
         with:
@@ -61,7 +66,25 @@ jobs:
           set -euo pipefail
           TAG="${{ steps.tag.outputs.name }}"
 
-          mapfile -t FILES < <(find bundles -type f)
+          # 只上传安装包与更新相关文件，不上传 bundle 内数百个中间文件
+          mapfile -t FILES < <(find bundles -type f \( \
+            -iname '*.exe' -o \
+            -iname '*.dmg' -o \
+            -iname '*.deb' -o \
+            -iname '*.AppImage' -o \
+            -iname '*.sig' -o \
+            -iname '*.tar.gz' -o \
+            -name 'latest.json' \
+          \) | sort -u)
+
+          if [ ${#FILES[@]} -eq 0 ]; then
+            echo "::error::No installer files found (.exe/.dmg/.deb/.AppImage)"
+            find bundles -type f | head -20
+            exit 1
+          fi
+
+          echo "Uploading ${#FILES[@]} file(s) to release $TAG"
+          printf '  - %s\n' "${FILES[@]}"
 
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "Removing existing release $TAG (keeping tag)"

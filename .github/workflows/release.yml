@@ -114,6 +114,11 @@ jobs:
       contents: write
 
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.inputs.tag || github.ref_name }}
+
       - name: Download all platform bundles
         uses: actions/download-artifact@v4
         with:
@@ -141,13 +146,22 @@ jobs:
           set -euo pipefail
           TAG="${{ steps.tag.outputs.name }}"
 
-          mapfile -t FILES < <(find bundles -type f)
+          mapfile -t FILES < <(find bundles -type f \( \
+            -iname '*.exe' -o \
+            -iname '*.dmg' -o \
+            -iname '*.deb' -o \
+            -iname '*.AppImage' -o \
+            -iname '*.sig' -o \
+            -iname '*.tar.gz' -o \
+            -name 'latest.json' \
+          \) | sort -u)
           if [ ${#FILES[@]} -eq 0 ]; then
-            echo "::error::No release files found under bundles/"
+            echo "::error::No installer files found (.exe/.dmg/.deb/.AppImage)"
             exit 1
           fi
 
           echo "Uploading ${#FILES[@]} file(s) to release $TAG"
+          printf '  - %s\n' "${FILES[@]}"
 
           # 删除已有 Release（保留 git tag），避免 --clobber 删除单个 asset 时 404
           if gh release view "$TAG" >/dev/null 2>&1; then
