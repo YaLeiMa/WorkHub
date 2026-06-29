@@ -6635,7 +6635,7 @@ dependencies = [
 
 [[package]]
 name = "work_hub"
-version = "1.0.3"
+version = "1.0.4"
 dependencies = [
  "open",
  "serde",
