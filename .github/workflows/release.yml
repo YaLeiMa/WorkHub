@@ -138,6 +138,13 @@ jobs:
       - name: List bundle files
         run: find bundles -type f -print
 
+      - name: Generate latest.json
+        run: |
+          node scripts/generate-latest-json.mjs \
+            --bundles bundles \
+            --tag "${{ steps.tag.outputs.name }}" \
+            --repo "${{ github.repository }}"
+
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -172,3 +179,4 @@ jobs:
             --draft \
             --title "WorkHub $TAG" \
             --generate-notes
+          # Draft 状态下 /releases/latest 不可用；确认 assets 含 latest.json 后请 Publish release
