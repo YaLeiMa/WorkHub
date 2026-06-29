@@ -138,6 +138,23 @@ jobs:
       - name: List bundle files
         run: find bundles -type f -print
 
+      - name: Verify updater artifacts (all platforms)
+        run: |
+          echo "=== .sig files ==="
+          find bundles -name '*.sig' | sort || true
+          echo "=== macOS (need WorkHub.app.tar.gz + .sig for latest.json) ==="
+          find bundles \( -name '*.dmg' -o -name '*.app.tar.gz' \) | sort || true
+          missing=0
+          for pattern in '*-setup.exe.sig' '*.app.tar.gz.sig' '*.AppImage.sig'; do
+            if ! find bundles -name "$pattern" | grep -q .; then
+              echo "::warning::Missing updater pattern: $pattern"
+              missing=$((missing + 1))
+            fi
+          done
+          if [ "$missing" -gt 0 ]; then
+            echo "::warning::$missing platform(s) missing updater .sig — latest.json will be incomplete. Check macOS build job logs."
+          fi
+
       - name: Generate latest.json
         run: |
           node scripts/generate-latest-json.mjs \

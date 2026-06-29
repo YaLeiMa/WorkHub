@@ -74,7 +74,10 @@ const allFiles = await walk(args.bundles);
 /** @type {{ sigPath: string; bundlePath: string; name: string; os: string; arch: string; priority: number }[]} */
 const candidates = [];
 
-for (const sigPath of allFiles.filter((f) => f.endsWith(".sig"))) {
+const sigPaths = allFiles.filter((f) => f.endsWith(".sig"));
+const unrecognizedSigs = [];
+
+for (const sigPath of sigPaths) {
   const bundlePath = sigPath.slice(0, -".sig".length);
   if (!existsSync(bundlePath)) {
     console.warn(`::warning::Orphan .sig (bundle missing): ${basename(sigPath)}`);
@@ -83,7 +86,10 @@ for (const sigPath of allFiles.filter((f) => f.endsWith(".sig"))) {
 
   const name = basename(bundlePath);
   const kind = classifyUpdaterBundle(name);
-  if (!kind) continue;
+  if (!kind) {
+    unrecognizedSigs.push(basename(sigPath));
+    continue;
+  }
 
   candidates.push({
     sigPath,
@@ -136,6 +142,28 @@ const manifest = {
 
 const outPath = join(args.bundles, "latest.json");
 await writeFile(outPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+const expected = ["darwin-aarch64", "windows-x86_64", "linux-x86_64"];
+const missing = expected.filter((k) => !platforms[k]);
+if (missing.length > 0) {
+  console.warn(`::warning::latest.json missing platforms: ${missing.join(", ")}`);
+  const hasDmg = allFiles.some((f) => /\.dmg$/i.test(f));
+  const hasAppTarGz = allFiles.some((f) => /\.app\.tar\.gz$/i.test(f));
+  const hasAppTarGzSig = sigPaths.some((f) => /\.app\.tar\.gz\.sig$/i.test(f));
+  if (hasDmg && !hasAppTarGzSig) {
+    console.warn(
+      "::warning::macOS .dmg found but no WorkHub.app.tar.gz.sig — mac CI job may have failed, or TAURI_SIGNING_PRIVATE_KEY was missing on macOS build.",
+    );
+  }
+  if (hasAppTarGz && !hasAppTarGzSig) {
+    console.warn(
+      "::warning::WorkHub.app.tar.gz exists without .sig — re-run macOS build with TAURI_SIGNING_PRIVATE_KEY set.",
+    );
+  }
+}
+if (unrecognizedSigs.length > 0) {
+  console.warn(`::warning::Unrecognized .sig (skipped): ${unrecognizedSigs.join(", ")}`);
+}
 
 console.log(`Generated ${outPath} with platforms: ${Object.keys(platforms).join(", ")}`);
 console.log(JSON.stringify(manifest, null, 2));
