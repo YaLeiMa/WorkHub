@@ -1,18 +1,17 @@
 #!/usr/bin/env node
 /**
  * 从 Tauri createUpdaterArtifacts 产物生成 latest.json（供 tauri-plugin-updater 使用）。
- * 扫描 .nsis.zip / .app.tar.gz / .AppImage.tar.gz 及对应 .sig 文件。
+ *
+ * Tauri v2（createUpdaterArtifacts: true）：
+ *   Windows → *-setup.exe + .sig
+ *   macOS   → *.app.tar.gz + .sig
+ *   Linux   → *.AppImage + .sig
+ *
+ * v1Compatible 另支持 *.nsis.zip / *.AppImage.tar.gz 等。
  */
 import { existsSync } from "node:fs";
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
-
-const UPDATER_PATTERNS = [
-  { test: /\.nsis\.zip$/i, os: "windows", priority: 1 },
-  { test: /\.msi\.zip$/i, os: "windows", priority: 2 },
-  { test: /\.app\.tar\.gz$/i, os: "darwin", priority: 1 },
-  { test: /\.AppImage\.tar\.gz$/i, os: "linux", priority: 1 },
-];
 
 function parseArgs(argv) {
   const args = { bundles: "bundles", tag: "", repo: "", notes: "" };
@@ -33,9 +32,21 @@ function parseArgs(argv) {
   return args;
 }
 
+/** @returns {{ os: string; priority: number } | null} */
+function classifyUpdaterBundle(name) {
+  if (/\.app\.tar\.gz$/i.test(name)) return { os: "darwin", priority: 100 };
+  if (/\.AppImage\.tar\.gz$/i.test(name)) return { os: "linux", priority: 50 };
+  if (/\.AppImage$/i.test(name)) return { os: "linux", priority: 100 };
+  if (/\.nsis\.zip$/i.test(name)) return { os: "windows", priority: 50 };
+  if (/-setup\.exe$/i.test(name)) return { os: "windows", priority: 99 };
+  if (/\.msi\.zip$/i.test(name)) return { os: "windows", priority: 48 };
+  if (/\.msi$/i.test(name)) return { os: "windows", priority: 40 };
+  return null;
+}
+
 function parseArch(filename) {
   const lower = filename.toLowerCase();
-  if (/aarch64|arm64/.test(lower)) return "aarch64";
+  if (/aarch64|arm64|universal/.test(lower)) return "aarch64";
   if (/i686|i386/.test(lower)) return "i686";
   if (/armv7/.test(lower)) return "armv7";
   return "x86_64";
@@ -60,31 +71,31 @@ const args = parseArgs(process.argv);
 const version = args.tag.replace(/^v/i, "");
 const allFiles = await walk(args.bundles);
 
-/** @type {{ path: string; name: string; os: string; arch: string; priority: number }[]} */
+/** @type {{ sigPath: string; bundlePath: string; name: string; os: string; arch: string; priority: number }[]} */
 const candidates = [];
 
-for (const filePath of allFiles) {
-  if (filePath.endsWith(".sig")) continue;
-  const name = basename(filePath);
-  const pattern = UPDATER_PATTERNS.find((p) => p.test.test(name));
-  if (!pattern) continue;
-
-  const sigPath = `${filePath}.sig`;
-  if (!existsSync(sigPath)) {
-    console.warn(`::warning::Updater bundle missing .sig (check TAURI_SIGNING_PRIVATE_KEY): ${name}`);
+for (const sigPath of allFiles.filter((f) => f.endsWith(".sig"))) {
+  const bundlePath = sigPath.slice(0, -".sig".length);
+  if (!existsSync(bundlePath)) {
+    console.warn(`::warning::Orphan .sig (bundle missing): ${basename(sigPath)}`);
     continue;
   }
 
+  const name = basename(bundlePath);
+  const kind = classifyUpdaterBundle(name);
+  if (!kind) continue;
+
   candidates.push({
-    path: filePath,
+    sigPath,
+    bundlePath,
     name,
-    os: pattern.os,
+    os: kind.os,
     arch: parseArch(name),
-    priority: pattern.priority,
+    priority: kind.priority,
   });
 }
 
-candidates.sort((a, b) => a.priority - b.priority || a.name.localeCompare(b.name));
+candidates.sort((a, b) => b.priority - a.priority || a.name.localeCompare(b.name));
 
 /** @type {Record<string, { signature: string; url: string }>} */
 const platforms = {};
@@ -93,7 +104,7 @@ for (const item of candidates) {
   const key = `${item.os}-${item.arch}`;
   if (platforms[key]) continue;
 
-  const signature = (await readFile(`${item.path}.sig`, "utf8")).trim();
+  const signature = (await readFile(item.sigPath, "utf8")).trim();
   platforms[key] = {
     signature,
     url: assetDownloadUrl(args.repo, args.tag, item.name),
@@ -101,9 +112,18 @@ for (const item of candidates) {
 }
 
 if (Object.keys(platforms).length === 0) {
-  console.error(
-    "::error::No updater artifacts found. Expected *.nsis.zip, *.app.tar.gz, or *.AppImage.tar.gz with matching .sig files.",
-  );
+  const sigFiles = allFiles.filter((f) => f.endsWith(".sig")).map(basename);
+  console.error("::error::No updater artifacts found.");
+  console.error("Expected Tauri v2: *-setup.exe.sig, *.app.tar.gz.sig, *.AppImage.sig");
+  console.error("Or v1Compatible: *.nsis.zip.sig, *.AppImage.tar.gz.sig");
+  console.error("Ensure TAURI_SIGNING_PRIVATE_KEY is set in GitHub Secrets.");
+  if (sigFiles.length > 0) {
+    console.error(`Found .sig files (${sigFiles.length}): ${sigFiles.join(", ")}`);
+  } else {
+    console.error("No .sig files found in bundles — signing likely did not run.");
+    console.error("Sample files:");
+    for (const f of allFiles.slice(0, 30)) console.error(`  ${f}`);
+  }
   process.exit(1);
 }
 
