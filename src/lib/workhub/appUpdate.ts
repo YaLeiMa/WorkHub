@@ -4,7 +4,7 @@ import { inTauri } from "./db";
 import { toast } from "./toast";
 
 export const APP_RELEASES_URL =
-  "https://gitcode.com/weixin_48914151/work_hub_releases/";
+  "https://github.com/YaLeiMa/WorkHub/releases";
 
 export type AppUpdateStatus =
   | "idle"
