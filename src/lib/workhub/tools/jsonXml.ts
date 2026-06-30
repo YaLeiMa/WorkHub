@@ -231,9 +231,9 @@ function parserOptions(opts: JsonXmlOptions) {
   };
 }
 
-/** JSON 文本 → XML 文本 */
+/** JSON 文本 → XML 文本（不做 unwrap / 嵌入 XML 等解析后处理） */
 export function jsonToXml(input: string, opts: JsonXmlOptions): string {
-  const obj = postProcess(JSON.parse(input), opts);
+  const obj = JSON.parse(input);
 
   const builder = new XMLBuilder({
     ignoreAttributes: !opts.keepAttributes,
@@ -241,7 +241,7 @@ export function jsonToXml(input: string, opts: JsonXmlOptions): string {
     textNodeName: TEXT_NODE,
     format: true,
     indentBy: indentString(opts.indent),
-    suppressEmptyNode: true,
+    suppressEmptyNode: false,
     suppressBooleanAttributes: false,
   });
   let xml = String(builder.build(obj)).trimEnd();

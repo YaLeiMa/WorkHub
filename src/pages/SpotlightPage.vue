@@ -185,7 +185,7 @@ onUnmounted(() => {
 
 <template>
   <div
-    class="flex h-screen w-screen flex-col overflow-hidden rounded-[var(--radius-lg)] border border-border bg-bg text-text shadow-pop"
+    class="flex h-screen w-screen flex-col overflow-hidden rounded-[var(--radius-lg)] bg-bg text-text"
     tabindex="-1"
   >
     <template v-if="activeTool">
@@ -270,7 +270,7 @@ onUnmounted(() => {
 
     <footer
       v-if="dataReady && showResults"
-      class="shrink-0 border-t border-border px-3 py-1 text-[10px] leading-snug text-text-secondary"
+      class="shrink-0 bg-[color-mix(in_oklab,var(--color-surface-hover)_45%,transparent)] px-3 py-1 text-[10px] leading-snug text-text-secondary"
     >
       <div class="flex items-center justify-between gap-3 whitespace-nowrap">
         <span class="min-w-0 truncate">{{ t("home.spotlightStatusHint") }}</span>

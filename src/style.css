@@ -92,6 +92,13 @@
   ::placeholder {
     color: var(--color-text-placeholder);
   }
+
+  /* 悬浮窗：避免 body 与卡片边缘叠出双线；阴影交给系统窗口 */
+  html.spotlight-window,
+  html.spotlight-window body {
+    overflow: hidden;
+    background-color: var(--color-bg);
+  }
 }
 
 /* 文本工具：与规范 §2.2 字号表一致 */

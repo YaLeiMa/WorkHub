@@ -296,29 +296,32 @@ onUnmounted(() => {
             <option value="tab">Tab</option>
           </select>
         </label>
-        <label class="flex items-center gap-1 text-text-secondary">
-          <input v-model="parseEmbeddedXml" type="checkbox" class="accent-[var(--color-primary)]" />
-          {{ t("tools.jsonXml.parseEmbeddedXml") }}
-        </label>
-        <label class="flex items-center gap-1 text-text-secondary">
-          <input v-model="unwrapEnabled" type="checkbox" class="accent-[var(--color-primary)]" />
-          {{ t("tools.jsonXml.unwrapEnabled") }}
-        </label>
-        <label class="flex items-center gap-1 text-text-secondary">
-          <input v-model="stripNsPrefix" type="checkbox" class="accent-[var(--color-primary)]" />
-          {{ t("tools.jsonXml.stripNsPrefix") }}
-        </label>
-        <label class="flex items-center gap-1 text-text-secondary">
-          <input v-model="keepAttributes" type="checkbox" class="accent-[var(--color-primary)]" />
-          {{ t("tools.jsonXml.keepAttributes") }}
-        </label>
-        <label class="flex items-center gap-1 text-text-secondary">
-          <input v-model="xmlDeclaration" type="checkbox" class="accent-[var(--color-primary)]" />
-          {{ t("tools.jsonXml.xmlDeclaration") }}
-        </label>
+        <template v-if="mode === 'x2j'">
+          <label class="flex items-center gap-1 text-text-secondary">
+            <input v-model="parseEmbeddedXml" type="checkbox" class="accent-[var(--color-primary)]" />
+            {{ t("tools.jsonXml.parseEmbeddedXml") }}
+          </label>
+          <label class="flex items-center gap-1 text-text-secondary">
+            <input v-model="unwrapEnabled" type="checkbox" class="accent-[var(--color-primary)]" />
+            {{ t("tools.jsonXml.unwrapEnabled") }}
+          </label>
+          <label class="flex items-center gap-1 text-text-secondary">
+            <input v-model="stripNsPrefix" type="checkbox" class="accent-[var(--color-primary)]" />
+            {{ t("tools.jsonXml.stripNsPrefix") }}
+          </label>
+          <label class="flex items-center gap-1 text-text-secondary">
+            <input v-model="keepAttributes" type="checkbox" class="accent-[var(--color-primary)]" />
+            {{ t("tools.jsonXml.keepAttributes") }}
+          </label>
+          <label class="flex items-center gap-1 text-text-secondary">
+            <input v-model="xmlDeclaration" type="checkbox" class="accent-[var(--color-primary)]" />
+            {{ t("tools.jsonXml.xmlDeclaration") }}
+          </label>
+        </template>
       </div>
     </div>
 
+    <template v-if="mode === 'x2j'">
     <div
       class="flex flex-col gap-2 rounded-[var(--radius-md)] border border-border bg-[color-mix(in_oklab,var(--color-surface-hover)_35%,transparent)] px-3 py-2"
     >
@@ -394,6 +397,7 @@ onUnmounted(() => {
         {{ t("tools.jsonXml.unwrapFieldsHint") }}
       </p>
     </div>
+    </template>
 
     <!-- 左右分栏：输入 | 结果 -->
     <div :class="splitClass">
