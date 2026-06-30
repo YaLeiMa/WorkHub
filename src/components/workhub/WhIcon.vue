@@ -38,7 +38,11 @@ export type IconName =
 
   | "image"
 
-  | "archive";
+  | "archive"
+
+  | "tool"
+
+  | "app";
 
 
 
@@ -143,6 +147,14 @@ const PATHS: Record<IconName, string[]> = {
     "M6 10v9a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-9",
 
     "M10 14h4",
+
+  ],
+
+  app: ["M4 4h6v6H4z", "M14 4h6v6h-6z", "M4 14h6v6H4z", "M14 14h6v6h-6z"],
+
+  tool: [
+
+    "M14.7 6.3a4 4 0 0 0-5.4 5.2L4 16.8 7.2 20l5.3-5.3a4 4 0 0 0 5.2-5.4l-2.6 2.6-2.3-.3-.3-2.3z",
 
   ],
 

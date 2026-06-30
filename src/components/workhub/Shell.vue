@@ -13,6 +13,8 @@ import SnippetsPage from "@/pages/SnippetsPage.vue";
 import SnippetDetailPage from "@/pages/SnippetDetailPage.vue";
 import FavoritesPage from "@/pages/FavoritesPage.vue";
 import ClipboardPage from "@/pages/ClipboardPage.vue";
+import AppsPage from "@/pages/AppsPage.vue";
+import ToolsPage from "@/pages/ToolsPage.vue";
 import SettingsPage from "@/pages/SettingsPage.vue";
 import { currentPath, navigate } from "@/lib/workhub/nav";
 import { statusHintKey } from "@/lib/workhub/status";
@@ -22,7 +24,7 @@ import { applyDesktopPreferences, loadSettings, settingsStore } from "@/lib/work
 import { inTauri } from "@/lib/workhub/db";
 import { getAppVersion, appUpdateStore, refreshAppUpdateStatus } from "@/lib/workhub/appUpdate";
 
-type IconName = "home" | "project" | "snippet" | "star" | "link" | "settings" | "clipboard";
+type IconName = "home" | "project" | "snippet" | "star" | "link" | "settings" | "clipboard" | "app" | "tool";
 
 interface NavItem {
   to: string;
@@ -38,14 +40,16 @@ const footerHint = computed(() => {
   return t(statusHintKey.value);
 });
 
-// 左侧导航，对应 Ctrl+1~6（规范 §3）
+// 左侧导航，对应 Ctrl+1~8
 const NAV = computed<NavItem[]>(() => [
   { to: "/", label: t("nav.home"), hotkey: "Ctrl+1", icon: "home" },
   { to: "/projects", label: t("nav.projects"), hotkey: "Ctrl+2", icon: "project" },
   { to: "/snippets", label: t("nav.snippets"), hotkey: "Ctrl+3", icon: "snippet" },
   { to: "/favorites", label: t("nav.favorites"), hotkey: "Ctrl+4", icon: "link" },
-  { to: "/settings", label: t("nav.settings"), hotkey: "Ctrl+5", icon: "settings" },
-  { to: "/clipboard", label: t("nav.clipboard"), hotkey: "Ctrl+6", icon: "clipboard" },
+  { to: "/apps", label: t("nav.apps"), hotkey: "Ctrl+5", icon: "app" },
+  { to: "/tools", label: t("nav.tools"), hotkey: "Ctrl+6", icon: "tool" },
+  { to: "/clipboard", label: t("nav.clipboard"), hotkey: "Ctrl+7", icon: "clipboard" },
+  { to: "/settings", label: t("nav.settings"), hotkey: "Ctrl+8", icon: "settings" },
 ]);
 
 const NAV_TINT: Partial<Record<IconName, string>> = {
@@ -54,13 +58,19 @@ const NAV_TINT: Partial<Record<IconName, string>> = {
   snippet: "#D99100",
   star: "#D99100",
   link: "#3370FF",
+  app: "#7C3AED",
   clipboard: "#646A73",
+  tool: "#2BA471",
 };
 
 function isActive(to: string) {
   return to === "/"
     ? currentPath.value === "/"
     : currentPath.value.startsWith(to);
+}
+
+function onNavClick(to: string) {
+  navigate(to);
 }
 
 const currentLabel = computed(
@@ -91,14 +101,14 @@ const footerVersion = computed(() =>
   appVersion.value ? t("app.footerVersion", { version: appVersion.value }) : "WorkHub",
 );
 
-// 全局快捷键：Ctrl+1~6 切换模块；Ctrl+, 设置；Alt+Z / Alt+X 由 Rust 全局注册；Esc 隐藏到托盘
+// 全局快捷键：Ctrl+1~8 切换模块；Ctrl+, 设置；Alt+Z / Alt+X 由 Rust 全局注册；Esc 隐藏到托盘
 function onWindowKey(e: KeyboardEvent) {
   const mod = e.ctrlKey || e.metaKey;
   if (mod && !e.shiftKey && !e.altKey) {
-    const idx = ["1", "2", "3", "4", "5", "6"].indexOf(e.key);
+    const idx = ["1", "2", "3", "4", "5", "6", "7", "8"].indexOf(e.key);
     if (idx >= 0) {
       e.preventDefault();
-      navigate(NAV.value[idx].to);
+      onNavClick(NAV.value[idx].to);
       return;
     }
     if (e.key === ",") {
@@ -118,8 +128,8 @@ function onWindowKey(e: KeyboardEvent) {
   void hideToTray();
 }
 
-function focusSearch() {
-  navigate("/");
+function focusHomeSearch() {
+  if (currentPath.value !== "/") return;
   window.dispatchEvent(new CustomEvent("workhub:focus-search"));
 }
 
@@ -136,7 +146,7 @@ function stopWindowButton(e: MouseEvent) {
 async function bindGlobalTauriEvents() {
   if (typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) return;
   const { listen } = await import("@tauri-apps/api/event");
-  await listen("workhub:focus-search", focusSearch);
+  await listen("workhub:focus-search", focusHomeSearch);
   await listen<string>("workhub:navigate", (e) => {
     if (e.payload) navigate(e.payload);
   });
@@ -226,7 +236,7 @@ onUnmounted(() => {
               ? 'bg-surface-active text-primary'
               : 'text-text-secondary hover:bg-surface-hover'
           "
-          @click="navigate(item.to)"
+          @click="onNavClick(item.to)"
         >
           <span
             v-if="isActive(item.to)"
@@ -281,6 +291,8 @@ onUnmounted(() => {
               :id="snippetDetailId"
             />
             <FavoritesPage v-else-if="currentPath === '/favorites'" />
+            <AppsPage v-else-if="currentPath === '/apps'" />
+            <ToolsPage v-else-if="currentPath === '/tools'" />
             <ClipboardPage v-else-if="currentPath === '/clipboard'" />
             <SettingsPage v-else-if="currentPath === '/settings'" />
             <EmptyState

@@ -6,8 +6,10 @@ const props = withDefaults(
   defineProps<{
     modelValue: string[];
     placeholder?: string;
+    /** 单个标签最大长度，默认 20（片段/项目标签）；XML 字段名等场景可加大 */
+    maxTagLength?: number;
   }>(),
-  { placeholder: "" },
+  { placeholder: "", maxTagLength: 20 },
 );
 
 const { t } = useI18n();
@@ -20,9 +22,9 @@ const emit = defineEmits<{
 
 const draft = ref("");
 
-// 回车 / 失焦 / 保存前提交输入框中的标签（单标签 ≤ 20 字，去重）
+// 回车 / 失焦 / 保存前提交输入框中的标签（去重）
 function flushDraft() {
-  const value = draft.value.trim().slice(0, 20);
+  const value = draft.value.trim().slice(0, props.maxTagLength);
   if (!value) return;
   if (props.modelValue.includes(value)) {
     draft.value = "";

@@ -22,6 +22,9 @@ const props = withDefaults(
     swatchHex?: string;
     /** 符号/Emoji 大图标预览 */
     glyph?: string;
+    /** 应用页字母图标 */
+    iconLetter?: string;
+    iconBg?: string;
     /** 用于推断文件类型图标（默认用 subtitle） */
     iconPath?: string;
     /** 是否展示收藏按钮 */
@@ -82,6 +85,14 @@ const iconHint = computed(() => props.iconPath ?? props.subtitle ?? props.title)
       class="flex size-7 shrink-0 items-center justify-center rounded-[5px] border border-border bg-surface-hover text-lg leading-none shadow-sm"
     >
       {{ glyph }}
+    </span>
+    <span
+      v-else-if="iconLetter && iconBg"
+      class="flex size-7 shrink-0 items-center justify-center rounded-[var(--radius-md)] text-sm font-semibold leading-none text-white shadow-sm"
+      :style="{ backgroundColor: iconBg }"
+      aria-hidden="true"
+    >
+      {{ iconLetter }}
     </span>
     <ItemIcon
       v-else
