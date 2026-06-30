@@ -214,8 +214,8 @@ function postProcess(obj: unknown, opts: JsonXmlOptions): unknown {
 }
 
 function parserOptions(opts: JsonXmlOptions) {
-  const strip = opts.stripNsPrefix
-    ? (name: string) => stripNsLocalName(name)
+  const strip: false | ((name: string) => string) = opts.stripNsPrefix
+    ? (name) => stripNsLocalName(name)
     : false;
   return {
     ignoreAttributes: !opts.keepAttributes,

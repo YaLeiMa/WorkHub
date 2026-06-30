@@ -183,7 +183,7 @@ export default {
       presetDeleted: "Preset deleted: {name}",
       presetHint: "Changes auto-save. Save named presets for different projects and switch between them.",
       stripNsPrefix: "Strip namespace prefix",
-      keepAttributes: "Keep attributes (@_)",
+      keepAttributes: literalMsg("Keep attributes (@_)"),
       xmlDeclaration: "XML declaration",
       invalidJson: "Invalid JSON: {msg}",
       invalidXml: "Invalid XML: {msg}",

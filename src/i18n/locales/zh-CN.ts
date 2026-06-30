@@ -183,7 +183,7 @@ export default {
       presetDeleted: "已删除预设「{name}」",
       presetHint: "修改选项或字段后会自动保存。不同项目可保存多套预设，切换即可复用。",
       stripNsPrefix: "去掉命名空间前缀",
-      keepAttributes: "保留属性（@_）",
+      keepAttributes: literalMsg("保留属性（@_）"),
       xmlDeclaration: "XML 声明头",
       invalidJson: "JSON 解析失败：{msg}",
       invalidXml: "XML 解析失败：{msg}",
