@@ -4,6 +4,11 @@ description = "允许调用 open_in_vscode 命令"
 commands.allow = ["open_in_vscode"]
 
 [[permission]]
+identifier = "allow-launch-app"
+description = "允许启动快捷应用"
+commands.allow = ["launch_app", "resolve_desktop_dir", "list_app_shortcuts"]
+
+[[permission]]
 identifier = "allow-open-local-path"
 description = "允许用系统默认程序打开本地文件/文件夹"
 commands.allow = ["open_local_path"]
@@ -21,7 +26,7 @@ commands.allow = ["window_set_always_on_top"]
 [[permission]]
 identifier = "allow-data-file-io"
 description = "允许读写用户选择的备份 JSON 文件"
-commands.allow = ["write_text_file", "read_text_file"]
+commands.allow = ["write_text_file", "read_text_file", "read_image_file"]
 
 [[permission]]
 identifier = "allow-window-spotlight"

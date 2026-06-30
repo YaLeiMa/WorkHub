@@ -125,7 +125,7 @@ pub fn toggle_tray_window(app: &AppHandle) {
     }
 
     if mn_vis {
-        show_main_window(app, true, None);
+        show_main_window(app, false, None);
 
         return;
     }

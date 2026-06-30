@@ -4,6 +4,7 @@ fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
+mod app_shortcuts;
 mod commands;
 mod shortcut;
 mod tray;
@@ -150,6 +151,22 @@ fn migrations() -> Vec<Migration> {
             ",
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 12,
+            description: "create_launcher_apps_table",
+            sql: "
+            CREATE TABLE IF NOT EXISTS launcher_apps (
+                id TEXT PRIMARY KEY,
+                title TEXT NOT NULL,
+                target TEXT NOT NULL,
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                tags TEXT,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            );
+            ",
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
@@ -178,6 +195,9 @@ pub fn run() {
             greet,
             commands::open_in_vscode,
             commands::open_local_path,
+            commands::launch_app,
+            commands::resolve_desktop_dir,
+            commands::list_app_shortcuts,
             commands::window_hide,
             commands::window_hide_spotlight,
             commands::window_show_main,
@@ -188,6 +208,7 @@ pub fn run() {
             commands::window_set_always_on_top,
             commands::write_text_file,
             commands::read_text_file,
+            commands::read_image_file,
         ])
         .setup(|app| {
             tray::init(app.handle());

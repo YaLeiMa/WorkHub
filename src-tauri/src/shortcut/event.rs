@@ -7,7 +7,7 @@ pub fn handle_spotlight_shortcut(app: &AppHandle) {
 }
 
 pub fn handle_main_shortcut(app: &AppHandle) {
-    window::toggle_main_window(app, true);
+    window::toggle_main_window(app, false);
 }
 
 pub fn handle_quit_shortcut(app: &AppHandle) {

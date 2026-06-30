@@ -38,6 +38,7 @@
     "core:event:allow-emit",
     "allow-open-in-vscode",
     "allow-open-local-path",
+    "allow-launch-app",
     "allow-window-hide",
     "allow-window-spotlight",
     "allow-window-main-show",
