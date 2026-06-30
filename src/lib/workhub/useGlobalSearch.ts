@@ -1,4 +1,5 @@
 import { computed, ref, watch, type Ref } from "vue";
+import { appsStore } from "./appsStore";
 import { projectsStore } from "./projectsStore";
 import { snippetsStore } from "./snippetsStore";
 import { favoritesStore } from "./favoritesStore";
@@ -14,7 +15,7 @@ import { requestSnippetCopy } from "./snippetCopy";
 import { snippetMatchesSearch } from "./snippetSearch";
 import { matchesSearch, projectMatchesSearch, sortSearchRows } from "./utils";
 import { navigate } from "./nav";
-import { copyText, openFile, openProject, openUrl } from "./actions";
+import { copyText, launchApp, openFile, openProject, openUrl } from "./actions";
 import { t } from "@/i18n";
 import {
   SEARCH_GROUP_FAVORITES,
@@ -23,6 +24,8 @@ import {
   type SearchGroupKey,
 } from "./labels";
 import { parseSearchQuery, type ParsedSearchQuery } from "./searchPrefix";
+import { searchTools, toolDesc, toolName } from "./tools/registry";
+import { openTool } from "./tools/toolHost";
 import type { Favorite, ItemKind } from "./types";
 
 function isResourceFileKind(kind: Favorite["kind"]): boolean {
@@ -73,7 +76,8 @@ export function buildGlobalSearchHits(
   scope: SearchGroupKey | null = null,
 ): SearchRow[] {
   const browseClipboard = scope === "clipboard" && !kw;
-  if (!kw && !browseClipboard) return [];
+  const browseTools = scope === "tool" && !kw;
+  if (!kw && !browseClipboard && !browseTools) return [];
 
   const out: SearchRow[] = [];
   const match = (s: string) => matchesSearch(s, kw);
@@ -81,6 +85,24 @@ export function buildGlobalSearchHits(
     projectMatchesSearch(p, kw);
   /** 全局搜索时，命中项目名会带出该项目下全部文件/链接/命令 */
   const bundleByProjectName = !scope;
+
+  if (wantsGroup("tool", scope)) {
+    out.push(
+      ...searchTools(kw).map((tool) => ({
+        group: "tool" as SearchGroup,
+        id: `tool-${tool.id}`,
+        kind: "tool" as ItemKind,
+        title: toolName(tool),
+        subtitle: toolDesc(tool),
+        updatedAt: 0,
+        recentAt: recentAt("tool", tool.id),
+        action: () => {
+          openTool(tool.id);
+          return true;
+        },
+      })),
+    );
+  }
 
   if (wantsGroup("project", scope)) {
     out.push(
@@ -384,6 +406,38 @@ export function buildGlobalSearchHits(
     out.push(...sortLimited(commandHits, kw));
   }
 
+  if (wantsGroup("app", scope)) {
+    out.push(
+      ...sortLimited(
+        appsStore.list
+          .filter(
+            (a) =>
+              match(a.title) || match(a.target) || a.tags.some(match),
+          )
+          .map((a) => ({
+            group: "app" as SearchGroup,
+            id: `app-${a.id}`,
+            kind: "app" as ItemKind,
+            title: a.title,
+            subtitle: a.target,
+            tags: a.tags,
+            updatedAt: a.updatedAt,
+            recentAt: recentAt("app", a.id),
+            action: () =>
+              launchApp(a.target, a.title, {
+                kind: "app",
+                refId: a.id,
+                title: a.title,
+                subtitle: a.target,
+              }),
+            navigate: () => navigate("/apps"),
+          })),
+        kw,
+        LIST_GROUP_LIMIT,
+      ),
+    );
+  }
+
   if (wantsGroup("clipboard", scope) && settingsStore.clipboardHistoryEnabled) {
     const clipKw =
       browseClipboard ||
@@ -429,7 +483,9 @@ export function buildGlobalSearchHits(
     out.push(...clipHits);
   }
 
-  return out;
+  return sortSearchRows(out, kw, {
+    clipboardLast: scope !== "clipboard",
+  });
 }
 
 /** 首页 / 悬浮窗共用的全局搜索逻辑 */

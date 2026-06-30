@@ -8,7 +8,9 @@ export type ItemKind =
   | "file"
   | "folder"
   | "doc"
-  | "clipboard";
+  | "clipboard"
+  | "app"
+  | "tool";
 
 export interface ClipboardEntry {
   id: string;
@@ -64,6 +66,17 @@ export interface Favorite {
   kind: "file" | "folder" | "link" | "doc";
   title: string;
   target: string; // 路径或 URL
+  tags: string[];
+  updatedAt: number;
+}
+
+/** 快捷启动应用（独立「应用」页） */
+export interface LauncherApp {
+  id: string;
+  title: string;
+  /** .exe / .lnk / .url / .app / .AppImage 等 */
+  target: string;
+  sortOrder: number;
   tags: string[];
   updatedAt: number;
 }

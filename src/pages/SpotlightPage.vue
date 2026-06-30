@@ -4,7 +4,10 @@ import SearchBox from "@/components/workhub/SearchBox.vue";
 import SearchResultsPanel from "@/components/workhub/SearchResultsPanel.vue";
 import Toaster from "@/components/workhub/Toaster.vue";
 import SnippetVariableDialog from "@/components/workhub/SnippetVariableDialog.vue";
+import ToolRunner from "@/components/workhub/tools/ToolRunner.vue";
 import { useGlobalSearch, type SearchRow } from "@/lib/workhub/useGlobalSearch";
+import { activeToolId, closeTool } from "@/lib/workhub/tools/toolHost";
+import { getTool, toolName } from "@/lib/workhub/tools/registry";
 import { hideCurrentWindow } from "@/lib/workhub/windowActions";
 import { handleListArrowDown, handleListArrowUp, scrollListSelection } from "@/lib/workhub/listScroll";
 import { initWorkhubData, reloadWorkhubData } from "@/lib/workhub/init";
@@ -20,6 +23,8 @@ const SEARCH_W = 480;
 const SEARCH_H = 48;
 const RESULTS_W = 560;
 const RESULTS_H = 432;
+const TOOL_W = 560;
+const TOOL_H = 520;
 
 const dataReady = ref(false);
 const searchBox = ref<InstanceType<typeof SearchBox> | null>(null);
@@ -27,7 +32,8 @@ const listRef = ref<HTMLElement | null>(null);
 
 const { q, debounced, searchScope, hasSearchInput, sel, hits, grouped } = useGlobalSearch();
 
-const showResults = computed(() => hasSearchInput.value);
+const activeTool = computed(() => getTool(activeToolId.value));
+const showResults = computed(() => hasSearchInput.value && !activeTool.value);
 const list = computed<SearchRow[]>(() => hits.value);
 
 let unlistenFocus: (() => void) | undefined;
@@ -55,20 +61,21 @@ async function focusSearch(selectAll = false) {
   });
 }
 
-async function resizeSpotlightWindow(withResults: boolean) {
+async function applySpotlightSize() {
   if (!inTauri()) return;
   const { getCurrentWindow } = await import("@tauri-apps/api/window");
   const { LogicalSize } = await import("@tauri-apps/api/dpi");
   const win = getCurrentWindow();
-  const size = withResults
-    ? new LogicalSize(RESULTS_W, RESULTS_H)
-    : new LogicalSize(SEARCH_W, SEARCH_H);
+  let size: InstanceType<typeof LogicalSize>;
+  if (activeTool.value) size = new LogicalSize(TOOL_W, TOOL_H);
+  else if (showResults.value) size = new LogicalSize(RESULTS_W, RESULTS_H);
+  else size = new LogicalSize(SEARCH_W, SEARCH_H);
   await win.setSize(size);
   await win.center();
 }
 
-watch(showResults, (v) => {
-  void resizeSpotlightWindow(v);
+watch([showResults, activeTool], () => {
+  void applySpotlightSize();
 });
 
 function activate(row: SearchRow) {
@@ -130,6 +137,19 @@ async function refreshDataIfReady() {
   await reloadWorkhubData();
 }
 
+function backFromTool() {
+  closeTool();
+  void focusSearch(false);
+}
+
+function onWindowKey(e: KeyboardEvent) {
+  if (snippetCopyState.open) return;
+  if (e.key === "Escape" && activeTool.value) {
+    e.preventDefault();
+    backFromTool();
+  }
+}
+
 async function bindFocusEvents() {
   if (!inTauri()) return;
   const { listen } = await import("@tauri-apps/api/event");
@@ -144,18 +164,20 @@ async function bindFocusEvents() {
 }
 
 onMounted(() => {
+  window.addEventListener("keydown", onWindowKey);
   void bindFocusEvents();
   void (async () => {
     await initWorkhubData();
     await loadSettings();
     dataReady.value = true;
     await nextTick();
-    await resizeSpotlightWindow(false);
+    await applySpotlightSize();
     await focusSearch(false);
   })();
 });
 
 onUnmounted(() => {
+  window.removeEventListener("keydown", onWindowKey);
   unlistenFocus?.();
   unlistenWinFocus?.();
 });
@@ -166,25 +188,68 @@ onUnmounted(() => {
     class="flex h-screen w-screen flex-col overflow-hidden rounded-[var(--radius-lg)] border border-border bg-bg text-text shadow-pop"
     tabindex="-1"
   >
-    <div
-      class="shrink-0 p-1"
-      :class="showResults ? 'border-b border-border' : ''"
-    >
-      <SearchBox
-        v-if="dataReady"
-        ref="searchBox"
-        v-model="q"
-        :placeholder="t('home.spotlightPlaceholder')"
-        autofocus
-        @keydown="onKey"
-      />
-      <div
-        v-else
-        class="flex h-10 items-center justify-center text-caption text-text-secondary"
-      >
-        {{ t("app.loadingShort") }}
+    <template v-if="activeTool">
+      <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div
+          class="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2"
+        >
+          <button
+            type="button"
+            class="shrink-0 text-caption text-text-secondary hover:text-text"
+            @mousedown.stop
+            @click="backFromTool"
+          >
+            ← {{ t("common.search") }}
+          </button>
+          <span class="shrink-0 text-caption text-text-placeholder">/</span>
+          <span class="min-w-0 truncate text-caption text-text-secondary">{{
+            toolName(activeTool)
+          }}</span>
+          <div
+            data-tauri-drag-region
+            class="min-h-6 min-w-8 flex-1 self-stretch"
+            aria-hidden="true"
+          />
+        </div>
+        <div class="scroll-y min-h-0 flex-1 p-3">
+          <ToolRunner :tool="activeTool" compact />
+        </div>
       </div>
-    </div>
+    </template>
+
+    <template v-else>
+      <div
+        class="flex shrink-0 items-stretch gap-0 p-1"
+        :class="showResults ? 'border-b border-border' : ''"
+      >
+        <div
+          data-tauri-drag-region
+          class="w-2 shrink-0 self-stretch"
+          aria-hidden="true"
+        />
+        <div class="min-w-0 flex-1">
+          <SearchBox
+            v-if="dataReady"
+            ref="searchBox"
+            v-model="q"
+            :placeholder="t('home.spotlightPlaceholder')"
+            autofocus
+            @keydown="onKey"
+          />
+          <div
+            v-else
+            class="flex h-10 items-center justify-center text-caption text-text-secondary"
+          >
+            {{ t("app.loadingShort") }}
+          </div>
+        </div>
+        <div
+          data-tauri-drag-region
+          class="w-2 shrink-0 self-stretch"
+          aria-hidden="true"
+        />
+      </div>
+    </template>
 
     <div
       v-if="showResults"

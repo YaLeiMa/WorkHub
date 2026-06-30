@@ -101,6 +101,82 @@ export async function openProject(
   }
 }
 
+/** 启动快捷应用（.exe / .lnk / .app 等） */
+export async function launchApp(
+  target: string,
+  title?: string,
+  recent?: RecentMeta,
+) {
+  const successText = t("toast.appLaunched", { name: title ?? target });
+  if (!inTauri()) {
+    toast.success(successText);
+    if (recent) void recordRecent({ ...recent, action: "open" });
+    return;
+  }
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("launch_app", { path: target.trim() });
+    toast.success(successText);
+    if (recent) void recordRecent({ ...recent, action: "open" });
+  } catch (e) {
+    toast.error(typeof e === "string" ? e : t("toast.appLaunchFailed"));
+  }
+}
+
+export interface AppShortcutCandidate {
+  title: string;
+  path: string;
+  keywords?: string[];
+}
+
+/** 扫描桌面 / 开始菜单等位置的快捷方式 */
+export async function listAppShortcuts(): Promise<AppShortcutCandidate[]> {
+  if (!inTauri()) return [];
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    return await invoke<AppShortcutCandidate[]>("list_app_shortcuts");
+  } catch {
+    return [];
+  }
+}
+
+/** 选择可执行文件或快捷方式（含桌面 .lnk / Steam .url） */
+export async function pickApplication(): Promise<string | null> {
+  if (!inTauri()) return null;
+  try {
+    const { open } = await import("@tauri-apps/plugin-dialog");
+    const { invoke } = await import("@tauri-apps/api/core");
+    const defaultPath =
+      (await invoke<string | null>("resolve_desktop_dir")) ?? undefined;
+    const result = await open({
+      multiple: false,
+      title: t("dialog.pickApplication"),
+      defaultPath,
+      // 不设扩展名过滤：Windows 下 *.exe 过滤器会隐藏 .lnk 快捷方式
+    });
+    if (typeof result !== "string") return null;
+    const ext = result.replace(/\\/g, "/").split("/").pop()?.split(".").pop()?.toLowerCase() ?? "";
+    const allowed = new Set([
+      "exe",
+      "lnk",
+      "url",
+      "bat",
+      "cmd",
+      "msi",
+      "app",
+      "appimage",
+      "desktop",
+    ]);
+    if (ext && !allowed.has(ext)) {
+      toast.error(t("toast.pickApplicationInvalid"));
+      return null;
+    }
+    return result;
+  } catch {
+    return null;
+  }
+}
+
 /** 桌面端打开目录选择器，浏览器环境返回 null */
 export async function pickDirectory(): Promise<string | null> {
   if (!inTauri()) return null;

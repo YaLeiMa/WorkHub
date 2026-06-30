@@ -14,7 +14,9 @@ export type WhGlyphIcon =
   | "file"
   | "clipboard"
   | "image"
-  | "archive";
+  | "archive"
+  | "app"
+  | "tool";
 
 export type ItemIconVisual =
   | { mode: "badge"; badge: FileTypeBadge }
@@ -102,6 +104,10 @@ export function resolveItemIcon(
       return { mode: "glyph", name: "command", tint: "#2BA471" };
     case "clipboard":
       return { mode: "glyph", name: "clipboard", tint: "#646A73" };
+    case "app":
+      return { mode: "glyph", name: "app", tint: "#7C3AED" };
+    case "tool":
+      return { mode: "glyph", name: "tool", tint: "#2BA471" };
     default:
       return { mode: "glyph", name: "file" };
   }

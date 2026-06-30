@@ -113,6 +113,13 @@ export interface SearchSortableRow {
   updatedAt: number;
   favorite?: boolean;
   recentAt?: number;
+  /** 用于排序分层（如剪贴板全局搜索降权） */
+  kind?: string;
+}
+
+export interface SortSearchRowsOptions {
+  /** 全局搜索时将剪贴板命中排在所有其他类型之后 */
+  clipboardLast?: boolean;
 }
 
 /** 计算搜索排序分（越高越靠前） */
@@ -120,11 +127,17 @@ export function computeSearchScore(
   row: SearchSortableRow,
   query: string,
 ): number {
-  let score = Math.max(
-    titleMatchScore(row.title, query),
-    tagMatchScore(row.tags ?? [], query),
-    textMatchScore(row.subtitle ?? "", query),
-  );
+  const titleScore = titleMatchScore(row.title, query);
+  const tagScore = tagMatchScore(row.tags ?? [], query);
+  const subtitleScore = textMatchScore(row.subtitle ?? "", query);
+
+  let score = Math.max(titleScore, tagScore);
+  if (titleScore > 0 || tagScore > 0) {
+    score = Math.max(score, subtitleScore);
+  } else if (subtitleScore > 0) {
+    // 仅路径/URL 等副标题命中时降权，避免压过标题前缀匹配（如 cha → chatgpt）
+    score = Math.max(score, Math.floor(subtitleScore * 0.35));
+  }
   if (row.favorite) score += 50;
   if (row.recentAt) score += row.recentAt / 1e15;
   return score;
@@ -133,8 +146,15 @@ export function computeSearchScore(
 export function sortSearchRows<T extends SearchSortableRow>(
   rows: T[],
   query: string,
+  options?: SortSearchRowsOptions,
 ): T[] {
+  const clipboardLast = options?.clipboardLast ?? false;
   return [...rows].sort((a, b) => {
+    if (clipboardLast) {
+      const aClip = a.kind === "clipboard";
+      const bClip = b.kind === "clipboard";
+      if (aClip !== bClip) return aClip ? 1 : -1;
+    }
     const diff = computeSearchScore(b, query) - computeSearchScore(a, query);
     if (diff !== 0) return diff;
     return b.updatedAt - a.updatedAt;

@@ -9,7 +9,9 @@ export type SearchGroupKey =
   | "file"
   | "link"
   | "command"
-  | "clipboard";
+  | "clipboard"
+  | "app"
+  | "tool";
 
 export const SEARCH_GROUP_SNIPPETS: SearchGroupKey = "snippet";
 export const SEARCH_GROUP_FAVORITES: SearchGroupKey = "favorite";

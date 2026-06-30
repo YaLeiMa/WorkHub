@@ -1,8 +1,10 @@
+import { loadApps, appsStore } from "./appsStore";
 import { loadClipboardHistory, clipboardStore } from "./clipboardStore";
 import { favoritesStore, loadFavorites } from "./favoritesStore";
 import { loadProjects, projectsStore } from "./projectsStore";
 import { loadRecents, recentStore } from "./recentStore";
 import { loadSnippets, snippetsStore } from "./snippetsStore";
+import { initToolHost } from "./tools/toolHost";
 
 let initPromise: Promise<void> | null = null;
 
@@ -15,6 +17,8 @@ export function initWorkhubData(): Promise<void> {
       await loadFavorites();
       await loadRecents();
       await loadClipboardHistory();
+      await loadApps();
+      await initToolHost();
     })();
   }
   return initPromise;
@@ -27,9 +31,11 @@ export async function reloadWorkhubData() {
   favoritesStore.loaded = false;
   recentStore.loaded = false;
   clipboardStore.loaded = false;
+  appsStore.loaded = false;
   await loadProjects();
   await loadSnippets();
   await loadFavorites();
   await loadRecents();
   await loadClipboardHistory();
+  await loadApps();
 }

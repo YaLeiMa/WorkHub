@@ -8,12 +8,14 @@ export const SEARCH_PREFIX_MAP: Record<string, SearchGroupKey> = {
   $: "link",
   "/": "file",
   "%": "clipboard",
+  "!": "app",
+  "=": "tool",
 };
 
 export interface ParsedSearchQuery {
   /** 限定分组；无前缀时为 null（全局） */
   scope: SearchGroupKey | null;
-  /** 前缀字符 @ # > $ / % */
+  /** 前缀字符 @ # > $ / % ! */
   prefix: string | null;
   /** 去掉前缀后的关键词（已 trim + lowerCase） */
   query: string;
