@@ -34,6 +34,14 @@ function isResourceFileKind(kind: Favorite["kind"]): boolean {
 
 export type SearchGroup = SearchGroupKey;
 
+/** 分组展示用：displayIndex 与屏幕自上而下顺序一致，供键盘 ↑↓ 使用 */
+export interface GroupedSearchHit {
+  row: SearchRow;
+  displayIndex: number;
+}
+
+export type GroupedSearchResults = [SearchGroup, GroupedSearchHit[]][];
+
 export interface SearchRow {
   id: string;
   kind: ItemKind;
@@ -235,7 +243,7 @@ export function buildGlobalSearchHits(
         .forEach((d) =>
           fileHits.push({
             group: "file",
-            id: `d-${d.id}`,
+            id: `doc-${p.id}-${d.id}`,
             kind: "doc",
             title: d.title,
             subtitle: `${p.name} · ${d.path}`,
@@ -308,7 +316,7 @@ export function buildGlobalSearchHits(
         .forEach((l) =>
           linkHits.push({
             group: "link",
-            id: `l-${l.id}`,
+            id: `lnk-${p.id}-${l.id}`,
             kind: "link",
             title: l.title,
             subtitle: `${p.name} · ${l.url}`,
@@ -379,7 +387,7 @@ export function buildGlobalSearchHits(
         .forEach((c) =>
           commandHits.push({
             group: "command",
-            id: `c-${c.id}`,
+            id: `cmd-${p.id}-${c.id}`,
             kind: "command",
             title: c.title,
             subtitle: c.command,
@@ -513,17 +521,30 @@ export function useGlobalSearch(externalQ?: Ref<string>) {
     buildGlobalSearchHits(parsed.value.query, parsed.value.scope),
   );
 
-  const grouped = computed<[SearchGroup, SearchRow[]][]>(() => {
+  const grouped = computed<GroupedSearchResults>(() => {
     if (!parsed.value.hasInput) return [];
     if (!parsed.value.query && hits.value.length === 0) return [];
     const map = new Map<SearchGroup, SearchRow[]>();
-    hits.value.forEach((h) => {
+    for (const h of hits.value) {
       const g = h.group!;
       if (!map.has(g)) map.set(g, []);
       map.get(g)!.push(h);
-    });
-    return Array.from(map.entries());
+    }
+    const entries: GroupedSearchResults = [];
+    let displayIndex = 0;
+    for (const [group, rows] of map) {
+      entries.push([
+        group,
+        rows.map((row) => ({ row, displayIndex: displayIndex++ })),
+      ]);
+    }
+    return entries;
   });
+
+  /** 与分组 UI 自上而下顺序一致的扁平列表（键盘导航用） */
+  const displayHits = computed(() =>
+    grouped.value.flatMap(([, items]) => items.map((item) => item.row)),
+  );
 
   const hasSearchInput = computed(() => parsed.value.hasInput);
 
@@ -532,7 +553,7 @@ export function useGlobalSearch(externalQ?: Ref<string>) {
   });
 
   watch(
-    () => hits.value.length,
+    () => displayHits.value.length,
     (len) => {
       if (sel.value >= len) sel.value = Math.max(0, len - 1);
     },
@@ -548,5 +569,6 @@ export function useGlobalSearch(externalQ?: Ref<string>) {
     sel,
     hits,
     grouped,
+    displayHits,
   };
 }

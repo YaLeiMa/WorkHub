@@ -30,10 +30,34 @@ export function toolDesc(tool: ToolDefinition): string {
   return tool.descKey ? t(tool.descKey) : "";
 }
 
+/** 泛指「工具箱」的检索词（中/英导航文案 + 常用别名） */
+function toolboxQueryTerms(): string[] {
+  return [
+    t("nav.tools"),
+    t("tools.title"),
+    t("searchGroup.tool"),
+    "tool",
+    "tools",
+    "toolbox",
+  ]
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+/** 输入为「工具 / 工具箱 / tools」等泛指词时，列出全部工具 */
+function matchesToolboxOverviewQuery(kw: string): boolean {
+  const k = kw.trim().toLowerCase();
+  if (k.length < 2) return false;
+  return toolboxQueryTerms().some(
+    (term) => term === k || term.includes(k) || k.includes(term),
+  );
+}
+
 /** 按关键词匹配工具（名称 / 描述 / keywords） */
 export function searchTools(kw: string): ToolDefinition[] {
   const k = kw.trim().toLowerCase();
   if (!k) return TOOLS;
+  if (matchesToolboxOverviewQuery(k)) return TOOLS;
   return TOOLS.filter((tool) => {
     const name = toolName(tool).toLowerCase();
     const desc = toolDesc(tool).toLowerCase();

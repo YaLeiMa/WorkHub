@@ -30,11 +30,11 @@ const dataReady = ref(false);
 const searchBox = ref<InstanceType<typeof SearchBox> | null>(null);
 const listRef = ref<HTMLElement | null>(null);
 
-const { q, debounced, searchScope, hasSearchInput, sel, hits, grouped } = useGlobalSearch();
+const { q, debounced, searchScope, hasSearchInput, sel, hits, grouped, displayHits } = useGlobalSearch();
 
 const activeTool = computed(() => getTool(activeToolId.value));
 const showResults = computed(() => hasSearchInput.value && !activeTool.value);
-const list = computed<SearchRow[]>(() => hits.value);
+const list = computed<SearchRow[]>(() => displayHits.value);
 
 let unlistenFocus: (() => void) | undefined;
 let unlistenWinFocus: (() => void) | undefined;

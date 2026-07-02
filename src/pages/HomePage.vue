@@ -47,6 +47,7 @@ const {
   sel,
   hits,
   grouped,
+  displayHits,
 } = useGlobalSearch();
 
 function findProjectIdBySubItem(
@@ -229,7 +230,7 @@ const flatRecent = computed<Row[]>(() =>
 const list = computed<Row[]>(() => {
   if (!hasSearchInput.value) return flatRecent.value;
   if (!debounced.value && searchScope.value !== "clipboard") return [];
-  return hits.value;
+  return displayHits.value;
 });
 
 // 列表长度变化时收敛选中项，避免越界

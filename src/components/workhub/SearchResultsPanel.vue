@@ -5,10 +5,10 @@ import ResultItem from "./ResultItem.vue";
 import EmptyState from "./EmptyState.vue";
 import { relTime } from "@/lib/workhub/utils";
 import { searchGroupLabel, type SearchGroupKey } from "@/lib/workhub/labels";
-import type { SearchGroup, SearchRow } from "@/lib/workhub/useGlobalSearch";
+import type { GroupedSearchResults, SearchRow } from "@/lib/workhub/useGlobalSearch";
 
 const props = defineProps<{
-  grouped: [SearchGroup, SearchRow[]][];
+  grouped: GroupedSearchResults;
   hits: SearchRow[];
   debounced: string;
   sel: number;
@@ -59,20 +59,24 @@ const waitingForKeyword = computed(
         }}</span>
       </div>
       <div class="flex flex-col gap-1">
-        <div v-for="h in items" :key="h.id" :data-i="hits.indexOf(h)">
+        <div
+          v-for="{ row, displayIndex } in items"
+          :key="displayIndex"
+          :data-i="displayIndex"
+        >
           <ResultItem
-            :kind="h.kind"
-            :title="h.title"
+            :kind="row.kind"
+            :title="row.title"
             :highlight="debounced"
-            :badge="h.badge"
-            :subtitle="h.subtitle"
-            :tags="h.tags"
-            :swatch-hex="h.swatchHex"
-            :glyph="h.glyph"
-            :meta="compact ? undefined : relTime(h.updatedAt)"
-            :selected="hits.indexOf(h) === sel"
-            @select="emit('update:sel', hits.indexOf(h))"
-            @activate="emit('activate', h)"
+            :badge="row.badge"
+            :subtitle="row.subtitle"
+            :tags="row.tags"
+            :swatch-hex="row.swatchHex"
+            :glyph="row.glyph"
+            :meta="compact ? undefined : relTime(row.updatedAt)"
+            :selected="displayIndex === sel"
+            @select="emit('update:sel', displayIndex)"
+            @activate="emit('activate', row)"
           />
         </div>
       </div>
