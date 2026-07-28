@@ -5,6 +5,7 @@ import WhIcon from "./WhIcon.vue";
 import AppLogo from "./AppLogo.vue";
 import Toaster from "./Toaster.vue";
 import SnippetVariableDialog from "./SnippetVariableDialog.vue";
+import WorkflowVariableDialog from "./WorkflowVariableDialog.vue";
 import EmptyState from "./EmptyState.vue";
 import HomePage from "@/pages/HomePage.vue";
 import ProjectsPage from "@/pages/ProjectsPage.vue";
@@ -15,16 +16,19 @@ import FavoritesPage from "@/pages/FavoritesPage.vue";
 import ClipboardPage from "@/pages/ClipboardPage.vue";
 import AppsPage from "@/pages/AppsPage.vue";
 import ToolsPage from "@/pages/ToolsPage.vue";
+import WorkflowsPage from "@/pages/WorkflowsPage.vue";
+import WorkflowDetailPage from "@/pages/WorkflowDetailPage.vue";
 import SettingsPage from "@/pages/SettingsPage.vue";
 import { currentPath, navigate } from "@/lib/workhub/nav";
 import { statusHintKey } from "@/lib/workhub/status";
 import { initTheme } from "@/lib/workhub/theme";
 import { initWorkhubData } from "@/lib/workhub/init";
-import { applyDesktopPreferences, loadSettings, settingsStore } from "@/lib/workhub/settingsStore";
+import { applyDesktopPreferences, bindAllowShellSync, loadSettings, settingsStore } from "@/lib/workhub/settingsStore";
+import { bindWorkflowHotkeyRunner } from "@/lib/workhub/workflowHotkeys";
 import { inTauri } from "@/lib/workhub/db";
 import { getAppVersion, appUpdateStore, refreshAppUpdateStatus } from "@/lib/workhub/appUpdate";
 
-type IconName = "home" | "project" | "snippet" | "star" | "link" | "settings" | "clipboard" | "app" | "tool";
+type IconName = "home" | "project" | "snippet" | "star" | "link" | "settings" | "clipboard" | "app" | "tool" | "command";
 
 interface NavItem {
   to: string;
@@ -40,7 +44,7 @@ const footerHint = computed(() => {
   return t(statusHintKey.value);
 });
 
-// 左侧导航，对应 Ctrl+1~8
+// 左侧导航，对应 Ctrl+1~9
 const NAV = computed<NavItem[]>(() => [
   { to: "/", label: t("nav.home"), hotkey: "Ctrl+1", icon: "home" },
   { to: "/projects", label: t("nav.projects"), hotkey: "Ctrl+2", icon: "project" },
@@ -49,7 +53,8 @@ const NAV = computed<NavItem[]>(() => [
   { to: "/apps", label: t("nav.apps"), hotkey: "Ctrl+5", icon: "app" },
   { to: "/tools", label: t("nav.tools"), hotkey: "Ctrl+6", icon: "tool" },
   { to: "/clipboard", label: t("nav.clipboard"), hotkey: "Ctrl+7", icon: "clipboard" },
-  { to: "/settings", label: t("nav.settings"), hotkey: "Ctrl+8", icon: "settings" },
+  { to: "/workflows", label: t("nav.workflows"), hotkey: "Ctrl+8", icon: "command" },
+  { to: "/settings", label: t("nav.settings"), hotkey: "Ctrl+9", icon: "settings" },
 ]);
 
 const NAV_TINT: Partial<Record<IconName, string>> = {
@@ -61,6 +66,7 @@ const NAV_TINT: Partial<Record<IconName, string>> = {
   app: "#7C3AED",
   clipboard: "#646A73",
   tool: "#2BA471",
+  command: "#2BA471",
 };
 
 function isActive(to: string) {
@@ -93,7 +99,16 @@ const snippetDetailId = computed(() => {
     : "";
 });
 
+const workflowDetailId = computed(() => {
+  const prefix = "/workflows/";
+  const id = currentPath.value.startsWith(prefix)
+    ? currentPath.value.slice(prefix.length)
+    : "";
+  return id && id !== "new" ? id : currentPath.value === "/workflows/new" ? "new" : "";
+});
+
 const dataReady = ref(false);
+const dataError = ref("");
 const appVersion = ref("");
 const isDesktop = inTauri();
 
@@ -101,11 +116,11 @@ const footerVersion = computed(() =>
   appVersion.value ? t("app.footerVersion", { version: appVersion.value }) : "WorkHub",
 );
 
-// 全局快捷键：Ctrl+1~8 切换模块；Ctrl+, 设置；Alt+Z / Alt+X 由 Rust 全局注册；Esc 隐藏到托盘
+// 全局快捷键：Ctrl+1~9 切换模块；Ctrl+, 设置；Alt+Z / Alt+X 由 Rust 全局注册；Esc 隐藏到托盘
 function onWindowKey(e: KeyboardEvent) {
   const mod = e.ctrlKey || e.metaKey;
   if (mod && !e.shiftKey && !e.altKey) {
-    const idx = ["1", "2", "3", "4", "5", "6", "7", "8"].indexOf(e.key);
+    const idx = ["1", "2", "3", "4", "5", "6", "7", "8", "9"].indexOf(e.key);
     if (idx >= 0) {
       e.preventDefault();
       onNavClick(NAV.value[idx].to);
@@ -122,7 +137,7 @@ function onWindowKey(e: KeyboardEvent) {
   if (e.key !== "Escape" || e.defaultPrevented) return;
   if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
   const p = currentPath.value;
-  if (p.startsWith("/projects/") || p.startsWith("/snippets/")) return;
+  if (p.startsWith("/projects/") || p.startsWith("/snippets/") || p.startsWith("/workflows/")) return;
 
   e.preventDefault();
   void hideToTray();
@@ -152,17 +167,34 @@ async function bindGlobalTauriEvents() {
   });
 }
 
+let unbindAllowShell: (() => void) | undefined;
+let unbindWorkflowHotkeys: (() => void) | undefined;
+
+function flushDatabase() {
+  if (!inTauri()) return;
+  void import("@tauri-apps/api/core").then(({ invoke }) => invoke("db_checkpoint"));
+}
+
 onMounted(() => {
   initTheme();
+  if (inTauri()) {
+    window.addEventListener("beforeunload", flushDatabase);
+  }
   void getAppVersion().then((v) => {
     appVersion.value = v;
   });
   void (async () => {
-    await initWorkhubData();
-    await loadSettings();
-    await applyDesktopPreferences();
-    dataReady.value = true;
-    void refreshAppUpdateStatus();
+    try {
+      await initWorkhubData();
+      await loadSettings();
+      await applyDesktopPreferences();
+      unbindAllowShell = await bindAllowShellSync();
+      unbindWorkflowHotkeys = await bindWorkflowHotkeyRunner();
+      dataReady.value = true;
+      void refreshAppUpdateStatus();
+    } catch (e) {
+      dataError.value = e instanceof Error ? e.message : String(e);
+    }
   })();
   void bindGlobalTauriEvents();
   window.addEventListener("keydown", onWindowKey);
@@ -170,6 +202,11 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener("keydown", onWindowKey);
+  if (inTauri()) {
+    window.removeEventListener("beforeunload", flushDatabase);
+  }
+  unbindAllowShell?.();
+  unbindWorkflowHotkeys?.();
 });
 </script>
 
@@ -273,7 +310,16 @@ onUnmounted(() => {
         </div>
         <div class="mx-auto max-w-[1080px] px-6 py-5">
           <div
-            v-if="!dataReady"
+            v-if="dataError"
+            class="py-12"
+          >
+            <EmptyState
+              :title="t('app.dataLoadFailed')"
+              :description="t('app.dataLoadFailedDesc', { error: dataError })"
+            />
+          </div>
+          <div
+            v-else-if="!dataReady"
             class="flex items-center justify-center py-16 text-body text-text-secondary"
           >
             {{ t("app.loading") }}
@@ -294,6 +340,11 @@ onUnmounted(() => {
             <AppsPage v-else-if="currentPath === '/apps'" />
             <ToolsPage v-else-if="currentPath === '/tools'" />
             <ClipboardPage v-else-if="currentPath === '/clipboard'" />
+            <WorkflowsPage v-else-if="currentPath === '/workflows'" />
+            <WorkflowDetailPage
+              v-else-if="currentPath === '/workflows/new' || workflowDetailId"
+              :id="currentPath === '/workflows/new' ? 'new' : workflowDetailId"
+            />
             <SettingsPage v-else-if="currentPath === '/settings'" />
             <EmptyState
               v-else
@@ -315,5 +366,6 @@ onUnmounted(() => {
 
     <Toaster />
     <SnippetVariableDialog />
+    <WorkflowVariableDialog />
   </div>
 </template>

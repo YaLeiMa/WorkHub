@@ -4,11 +4,17 @@ fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
+pub mod startup_log;
+
 mod app_shortcuts;
 mod commands;
+mod db_maintenance;
+mod git_status;
+mod shell_command;
 mod shortcut;
 mod tray;
 mod window;
+mod workflow_shortcut;
 
 use tauri_plugin_sql::{Migration, MigrationKind};
 
@@ -167,12 +173,78 @@ fn migrations() -> Vec<Migration> {
             ",
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 13,
+            description: "create_workflows_and_ssh_profiles",
+            sql: "
+            CREATE TABLE IF NOT EXISTS workflows (
+                id TEXT PRIMARY KEY,
+                title TEXT NOT NULL,
+                description TEXT,
+                project_id TEXT,
+                tags TEXT,
+                is_favorite INTEGER NOT NULL DEFAULT 0,
+                steps TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS ssh_profiles (
+                id TEXT PRIMARY KEY,
+                title TEXT NOT NULL,
+                host TEXT NOT NULL,
+                port INTEGER NOT NULL DEFAULT 22,
+                user TEXT NOT NULL,
+                identity_file TEXT,
+                proxy_jump TEXT,
+                project_id TEXT,
+                notes TEXT,
+                tags TEXT,
+                is_favorite INTEGER NOT NULL DEFAULT 0,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            );
+            ",
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 14,
+            description: "create_workflow_runs_table",
+            sql: "
+            CREATE TABLE IF NOT EXISTS workflow_runs (
+                id TEXT PRIMARY KEY,
+                workflow_id TEXT NOT NULL,
+                workflow_title TEXT NOT NULL,
+                status TEXT NOT NULL,
+                dry_run INTEGER NOT NULL DEFAULT 0,
+                started_at INTEGER NOT NULL,
+                finished_at INTEGER NOT NULL,
+                duration_ms INTEGER NOT NULL,
+                steps_log TEXT NOT NULL,
+                error_message TEXT,
+                variables TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_workflow_runs_workflow_id ON workflow_runs(workflow_id);
+            CREATE INDEX IF NOT EXISTS idx_workflow_runs_started_at ON workflow_runs(started_at DESC);
+            ",
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 15,
+            description: "workflows_add_hotkey",
+            sql: "ALTER TABLE workflows ADD COLUMN hotkey TEXT;",
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    startup_log::install_panic_hook();
+    startup_log::write("main() entry");
+    db_maintenance::prepare_database();
+    startup_log::write("WorkHub run() begin");
+
+    let app = match tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
             window::toggle_spotlight_window(app);
         }))
@@ -209,10 +281,25 @@ pub fn run() {
             commands::write_text_file,
             commands::read_text_file,
             commands::read_image_file,
+            git_status::git_repo_status,
+            git_status::git_repo_branches,
+            shell_command::run_shell_command,
+            workflow_shortcut::workflow_shortcuts_reload,
+            db_maintenance::db_checkpoint,
         ])
         .setup(|app| {
-            tray::init(app.handle());
-            shortcut::init(app.handle());
+            startup_log::write("setup: begin");
+            if let Err(e) = tray::init(app.handle()) {
+                startup_log::write(&format!("setup: tray init failed: {e}"));
+            } else {
+                startup_log::write("setup: tray ok");
+            }
+            if let Err(e) = shortcut::init(app.handle()) {
+                startup_log::write(&format!("setup: shortcut init failed: {e}"));
+            } else {
+                startup_log::write("setup: shortcut ok");
+            }
+            startup_log::write("setup: complete");
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -224,6 +311,47 @@ pub fn run() {
         .on_menu_event(|app, event| {
             let _ = crate::tray::event::handle_menu_event(app, event.id().as_ref());
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+    {
+        Ok(app) => app,
+        Err(e) => {
+            let msg = format!("WorkHub 启动失败：{e}");
+            startup_log::write(&msg);
+            show_fatal_dialog(&msg);
+            return;
+        }
+    };
+
+    app.run(|_app, event| {
+        match event {
+            tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit => {
+                db_maintenance::checkpoint_on_exit();
+            }
+            _ => {}
+        }
+    });
+    startup_log::write("run() exited normally");
+}
+
+#[cfg(windows)]
+fn show_fatal_dialog(message: &str) {
+    let log_hint = startup_log::log_file_path()
+        .map(|p| format!("\n\n日志：{}", p.display()))
+        .unwrap_or_default();
+    let text = format!("{message}{log_hint}");
+    let ps = format!(
+        "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.MessageBox]::Show(@'\n{}\n'@,'WorkHub 启动失败','OK','Error')",
+        text.replace('\'', "''")
+    );
+    let _ = std::process::Command::new("powershell")
+        .args(["-NoProfile", "-NonInteractive", "-Command", &ps])
+        .spawn();
+}
+
+#[cfg(not(windows))]
+fn show_fatal_dialog(message: &str) {
+    eprintln!("{message}");
+    if let Some(path) = startup_log::log_file_path() {
+        eprintln!("Log: {}", path.display());
+    }
 }

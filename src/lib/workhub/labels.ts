@@ -11,7 +11,9 @@ export type SearchGroupKey =
   | "command"
   | "clipboard"
   | "app"
-  | "tool";
+  | "tool"
+  | "workflow"
+  | "gitBranch";
 
 export const SEARCH_GROUP_SNIPPETS: SearchGroupKey = "snippet";
 export const SEARCH_GROUP_FAVORITES: SearchGroupKey = "favorite";

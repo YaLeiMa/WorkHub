@@ -10,6 +10,8 @@ export const SEARCH_PREFIX_MAP: Record<string, SearchGroupKey> = {
   "%": "clipboard",
   "!": "app",
   "=": "tool",
+  "*": "workflow",
+  "^": "gitBranch",
 };
 
 export interface ParsedSearchQuery {

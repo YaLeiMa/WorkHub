@@ -21,6 +21,11 @@ import { setStatusHint } from "@/lib/workhub/status";
 import { navigate } from "@/lib/workhub/nav";
 import { copyText, openProject, pickDirectory } from "@/lib/workhub/actions";
 import { toast } from "@/lib/workhub/toast";
+import {
+  gitStatusLabel,
+  gitStatusStore,
+  refreshGitStatuses,
+} from "@/lib/workhub/gitStatus";
 import { flattenGroupTree, parentGroupPath, parseGroupPath, collectGroupNodeKeys, decodeGroupParent, encodeGroupParent } from "@/lib/workhub/projectGroups";
 import {
   createProject,
@@ -123,6 +128,20 @@ const flatList = computed(() => {
   }
   return filtered.value;
 });
+
+function projectSubtitle(p: (typeof projectsStore.list)[number]) {
+  const git = gitStatusLabel(gitStatusStore.byProjectId[p.id]);
+  const base = `${projectGroupLabel(p.group)} · ${p.description} · ${p.path}`;
+  return git ? `${git} · ${base}` : base;
+}
+
+watch(
+  () => flatList.value.map((p) => ({ id: p.id, path: p.path })),
+  (items) => {
+    void refreshGitStatuses(items, 30);
+  },
+  { immediate: true },
+);
 
 const hasMatchingProjects = computed(() => filtered.value.length > 0);
 
@@ -694,7 +713,7 @@ provide("projectsPageCtx", {
             kind="project"
             :title="p.name"
             :highlight="q"
-            :subtitle="`${projectGroupLabel(p.group)} · ${p.description} · ${p.path}`"
+            :subtitle="projectSubtitle(p)"
             :tags="p.tags"
             :meta="relTime(p.updatedAt)"
             :selected="i === sel"

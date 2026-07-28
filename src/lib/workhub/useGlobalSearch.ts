@@ -26,6 +26,13 @@ import {
 import { parseSearchQuery, type ParsedSearchQuery } from "./searchPrefix";
 import { searchTools, toolDesc, toolName } from "./tools/registry";
 import { openTool } from "./tools/toolHost";
+import { workflowsStore } from "./workflowsStore";
+import { requestWorkflowRun } from "./workflowRunPrompt";
+import {
+  gitBranchStore,
+  gitCheckoutCommand,
+  refreshGitBranches,
+} from "./gitStatus";
 import type { Favorite, ItemKind } from "./types";
 
 function isResourceFileKind(kind: Favorite["kind"]): boolean {
@@ -85,7 +92,9 @@ export function buildGlobalSearchHits(
 ): SearchRow[] {
   const browseClipboard = scope === "clipboard" && !kw;
   const browseTools = scope === "tool" && !kw;
-  if (!kw && !browseClipboard && !browseTools) return [];
+  const browseWorkflows = scope === "workflow" && !kw;
+  const browseGitBranch = scope === "gitBranch" && !kw;
+  if (!kw && !browseClipboard && !browseTools && !browseWorkflows && !browseGitBranch) return [];
 
   const out: SearchRow[] = [];
   const match = (s: string) => matchesSearch(s, kw);
@@ -109,6 +118,38 @@ export function buildGlobalSearchHits(
           return true;
         },
       })),
+    );
+  }
+
+  if (wantsGroup("workflow", scope)) {
+    const workflowMatches = (w: (typeof workflowsStore.list)[number]) =>
+      !kw ||
+      match(w.title) ||
+      match(w.description) ||
+      w.tags.some(match) ||
+      kw === "workflow" ||
+      kw === "工作流" ||
+      kw === "自动化";
+    out.push(
+      ...sortLimited(
+        workflowsStore.list.filter(workflowMatches).map((w) => ({
+          group: "workflow" as SearchGroup,
+          id: `wf-${w.id}`,
+          kind: "workflow" as ItemKind,
+          title: w.title,
+          subtitle:
+            w.description ||
+            t("workflow.stepsCount", { n: w.steps.length }),
+          tags: w.tags,
+          updatedAt: w.updatedAt,
+          favorite: w.favorite,
+          recentAt: recentAt("workflow", w.id),
+          action: () => requestWorkflowRun(w),
+          navigate: () => navigate(`/workflows/${w.id}`),
+        })),
+        kw,
+        LIST_GROUP_LIMIT,
+      ),
     );
   }
 
@@ -496,11 +537,65 @@ export function buildGlobalSearchHits(
   });
 }
 
+function gitBranchMatches(
+  branch: string,
+  projectName: string,
+  kw: string,
+): boolean {
+  return matchesSearch(branch, kw) || matchesSearch(projectName, kw);
+}
+
+/** Git 分支搜索（需先 prefetch；`^` 前缀） */
+export function buildGitBranchHits(
+  kw: string,
+  scope: SearchGroupKey | null = null,
+): SearchRow[] {
+  if (scope && scope !== "gitBranch") return [];
+  const browse = scope === "gitBranch" && !kw;
+  if (!browse && !kw) return [];
+
+  const rows: SearchRow[] = [];
+  for (const p of projectsStore.list) {
+    if (!p.path?.trim()) continue;
+    const cache = gitBranchStore.byProjectId[p.id];
+    if (!cache?.hasRepo || !cache.branches.length) continue;
+
+    for (const branch of cache.branches) {
+      if (!browse && !gitBranchMatches(branch, p.name, kw)) continue;
+      const isCurrent = cache.current === branch;
+      const cmd = gitCheckoutCommand(branch);
+      rows.push({
+        group: "gitBranch",
+        id: `git-branch-${p.id}-${branch}`,
+        kind: "git_branch",
+        title: isCurrent ? `${branch} ✓` : branch,
+        subtitle: `${p.name} · ${cmd}`,
+        updatedAt: p.updatedAt,
+        recentAt: recentAt("project", p.id),
+        action: () => copyText(cmd, t("gitBranch.checkoutCopied")),
+        copy: () => copyText(cmd, t("gitBranch.checkoutCopied")),
+      });
+    }
+  }
+  return sortLimited(rows, kw, browse ? 15 : 10);
+}
+
+export async function prefetchGitBranchesForSearch(
+  scope: SearchGroupKey | null,
+  _kw: string,
+) {
+  if (scope !== "gitBranch") return;
+  const projects = projectsStore.list.filter((p) => p.path?.trim());
+  await refreshGitBranches(projects, 15);
+}
+
 /** 首页 / 悬浮窗共用的全局搜索逻辑 */
 export function useGlobalSearch(externalQ?: Ref<string>) {
   const q = externalQ ?? ref("");
   const parsed = ref<ParsedSearchQuery>(parseSearchQuery(""));
   const sel = ref(0);
+  const branchHits = ref<SearchRow[]>([]);
+  let branchPrefetchToken = 0;
 
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   watch(q, (val) => {
@@ -510,6 +605,21 @@ export function useGlobalSearch(externalQ?: Ref<string>) {
     }, 100);
   });
 
+  watch(
+    () => [parsed.value.scope, parsed.value.query] as const,
+    async ([scope, kw]) => {
+      if (scope !== "gitBranch") {
+        branchHits.value = [];
+        return;
+      }
+      const token = ++branchPrefetchToken;
+      await prefetchGitBranchesForSearch(scope, kw);
+      if (token !== branchPrefetchToken) return;
+      branchHits.value = buildGitBranchHits(kw, scope);
+    },
+    { immediate: true },
+  );
+
   /** 关键词（不含前缀，供高亮） */
   const searchQuery = computed(() => parsed.value.query);
   /** 前缀限定分组 */
@@ -517,9 +627,11 @@ export function useGlobalSearch(externalQ?: Ref<string>) {
   /** 兼容旧名 */
   const debounced = searchQuery;
 
-  const hits = computed(() =>
-    buildGlobalSearchHits(parsed.value.query, parsed.value.scope),
-  );
+  const hits = computed(() => {
+    const base = buildGlobalSearchHits(parsed.value.query, parsed.value.scope);
+    if (parsed.value.scope !== "gitBranch") return base;
+    return sortSearchRows([...base, ...branchHits.value], parsed.value.query);
+  });
 
   const grouped = computed<GroupedSearchResults>(() => {
     if (!parsed.value.hasInput) return [];

@@ -10,7 +10,9 @@ export type ItemKind =
   | "doc"
   | "clipboard"
   | "app"
-  | "tool";
+  | "tool"
+  | "workflow"
+  | "git_branch";
 
 export interface ClipboardEntry {
   id: string;
@@ -88,4 +90,55 @@ export interface RecentEntry {
   subtitle?: string;
   refId: string;
   at: number;
+}
+
+/** Workflow 步骤类型（MVP） */
+export type WorkflowStepType =
+  | "copy_snippet"
+  | "copy_text"
+  | "copy_project_command"
+  | "open_link"
+  | "open_project_link"
+  | "open_path"
+  | "open_vscode"
+  | "launch_app"
+  | "run_shell"
+  | "run_workflow"
+  | "delay"
+  | "notify";
+
+export interface WorkflowStep {
+  id: string;
+  type: WorkflowStepType;
+  title?: string;
+  /** 同 parallelGroup 值的步骤并行执行 */
+  parallelGroup?: number;
+  config: Record<string, unknown>;
+  continueOnError?: boolean;
+}
+
+export interface Workflow {
+  id: string;
+  title: string;
+  description: string;
+  /** 可选绑定项目，用于 {{project.*}} 变量与 open_vscode */
+  projectId?: string;
+  tags: string[];
+  favorite: boolean;
+  steps: WorkflowStep[];
+  /** 全局快捷键，如 Ctrl+Shift+D */
+  hotkey?: string;
+  updatedAt: number;
+}
+
+export interface GitRepoStatus {
+  hasRepo: boolean;
+  branch?: string;
+  isDirty: boolean;
+}
+
+export interface GitBranchList {
+  hasRepo: boolean;
+  current?: string;
+  branches: string[];
 }

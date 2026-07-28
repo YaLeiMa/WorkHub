@@ -46,6 +46,10 @@
     "allow-shortcut-reload",
     "allow-window-always-on-top",
     "allow-data-file-io",
+    "allow-git-status",
+    "allow-run-shell",
+    "allow-workflow-shortcuts",
+    "allow-db-checkpoint",
     "updater:default",
     "process:default"
   ]

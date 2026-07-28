@@ -28,6 +28,7 @@ import {
   setAutoStart,
   setClipboardHistoryEnabled,
   setClipboardHistoryMax,
+  setAllowShellExecution,
   setDefaultWindow,
   setLocale,
   setMainHotkey,
@@ -60,6 +61,19 @@ const draftSpotlightHotkey = ref(settingsStore.spotlightHotkey);
 const draftMainHotkey = ref(settingsStore.mainHotkey);
 
 const CLIPBOARD_MAX_OPTIONS = [50, 100, 200, 500];
+
+async function onToggleWorkflowShell() {
+  try {
+    await setAllowShellExecution(!settingsStore.allowShellExecution);
+    toast.success(
+      settingsStore.allowShellExecution
+        ? t("settings.toastWorkflowShellOn")
+        : t("settings.toastWorkflowShellOff"),
+    );
+  } catch {
+    toast.error(t("settings.toastFailed"));
+  }
+}
 
 async function onToggleClipboardHistory() {
   try {
@@ -444,6 +458,32 @@ async function onLocaleChange(locale: AppLocale) {
               </option>
             </WhSelect>
           </div>
+        </div>
+        <div class="flex items-start justify-between gap-6 px-4 py-3">
+          <div class="min-w-0">
+            <div class="text-body text-text">{{ t("settings.workflowShell") }}</div>
+            <div class="mt-0.5 text-caption text-text-secondary">
+              {{ t("settings.workflowShellDesc") }}
+            </div>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            :aria-checked="settingsStore.allowShellExecution"
+            class="relative h-6 w-11 shrink-0 rounded-full transition-colors"
+            :class="
+              settingsStore.allowShellExecution ? 'bg-primary' : 'bg-border'
+            "
+            :disabled="!inTauri()"
+            @click="onToggleWorkflowShell"
+          >
+            <span
+              class="absolute top-0.5 h-5 w-5 rounded-full bg-white transition-[left]"
+              :class="
+                settingsStore.allowShellExecution ? 'left-[22px]' : 'left-0.5'
+              "
+            />
+          </button>
         </div>
       </div>
     </section>

@@ -24,7 +24,10 @@ const KEY_SPOTLIGHT_HOTKEY = "setting_hotkey_spotlight";
 const KEY_MAIN_HOTKEY = "setting_hotkey_main";
 const KEY_CLIPBOARD_HISTORY = "setting_clipboard_history";
 const KEY_CLIPBOARD_MAX = "setting_clipboard_max";
+const KEY_ALLOW_SHELL = "setting_allow_shell";
 const KEY_LOCALE = LOCALE_STORAGE_KEY;
+
+export const ALLOW_SHELL_CHANGED_EVENT = "workhub:allow-shell-changed";
 
 export type DefaultWindow = "spotlight" | "main" | "hidden";
 
@@ -37,6 +40,8 @@ export const settingsStore = reactive({
   mainHotkey: "Alt+Z",
   clipboardHistoryEnabled: true,
   clipboardHistoryMax: 100,
+  /** 允许工作流 run_shell 步骤执行命令（默认关闭） */
+  allowShellExecution: false,
   loaded: false,
 });
 
@@ -48,6 +53,55 @@ async function applyAlwaysOnTop() {
   await invoke("window_set_always_on_top", {
     alwaysOnTop: settingsStore.alwaysOnTop,
   });
+}
+
+export async function refreshAllowShellExecution(): Promise<boolean> {
+  if (inTauri()) {
+    const db = await getDb();
+    if (db) {
+      const shell = await getMeta(db, KEY_ALLOW_SHELL);
+      settingsStore.allowShellExecution = shell === "1";
+    }
+  } else {
+    settingsStore.allowShellExecution =
+      localStorage.getItem(KEY_ALLOW_SHELL) === "1";
+  }
+  return settingsStore.allowShellExecution;
+}
+
+/** 执行 run_shell 前调用，避免多窗口内存设置不同步 */
+export async function isShellExecutionAllowed(): Promise<boolean> {
+  return refreshAllowShellExecution();
+}
+
+/** 主窗口 / 悬浮窗之间同步「允许执行命令」开关 */
+export async function bindAllowShellSync(): Promise<() => void> {
+  const unsubs: Array<() => void> = [];
+
+  if (inTauri()) {
+    const { listen } = await import("@tauri-apps/api/event");
+    unsubs.push(
+      await listen<boolean>(ALLOW_SHELL_CHANGED_EVENT, (e) => {
+        settingsStore.allowShellExecution = !!e.payload;
+      }),
+    );
+  }
+
+  const onStorage = (ev: StorageEvent) => {
+    if (ev.key !== KEY_ALLOW_SHELL) return;
+    settingsStore.allowShellExecution = ev.newValue === "1";
+  };
+  window.addEventListener("storage", onStorage);
+  unsubs.push(() => window.removeEventListener("storage", onStorage));
+
+  return () => unsubs.forEach((fn) => fn());
+}
+
+async function broadcastAllowShellChange(enabled: boolean) {
+  if (inTauri()) {
+    const { emit } = await import("@tauri-apps/api/event");
+    await emit(ALLOW_SHELL_CHANGED_EVENT, enabled);
+  }
 }
 
 export async function loadSettings() {
@@ -85,6 +139,8 @@ export async function loadSettings() {
           const n = Number(cbMax);
           if (n >= 20 && n <= 500) settingsStore.clipboardHistoryMax = n;
         }
+        const shell = await getMeta(db, KEY_ALLOW_SHELL);
+        settingsStore.allowShellExecution = shell === "1";
         const loc = await getMeta(db, KEY_LOCALE);
         if (loc === "en" || loc === "zh-CN") {
           settingsStore.locale = loc;
@@ -116,6 +172,8 @@ export async function loadSettings() {
         const n = Number(cbMax);
         if (n >= 20 && n <= 500) settingsStore.clipboardHistoryMax = n;
       }
+      settingsStore.allowShellExecution =
+        localStorage.getItem(KEY_ALLOW_SHELL) === "1";
       const loc = localStorage.getItem(KEY_LOCALE);
       if (loc === "en" || loc === "zh-CN") {
         settingsStore.locale = loc;
@@ -243,5 +301,16 @@ export async function setClipboardHistoryMax(max: number) {
     await applyClipboardHistoryMax(clamped);
   } else {
     localStorage.setItem(KEY_CLIPBOARD_MAX, String(clamped));
+  }
+}
+
+export async function setAllowShellExecution(enabled: boolean) {
+  settingsStore.allowShellExecution = enabled;
+  if (inTauri()) {
+    const db = await getDb();
+    if (db) await setMeta(db, KEY_ALLOW_SHELL, enabled ? "1" : "0");
+    await broadcastAllowShellChange(enabled);
+  } else {
+    localStorage.setItem(KEY_ALLOW_SHELL, enabled ? "1" : "0");
   }
 }

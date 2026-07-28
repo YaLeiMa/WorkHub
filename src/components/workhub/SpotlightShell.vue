@@ -2,15 +2,20 @@
 import { onMounted, onUnmounted, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import SpotlightPage from "@/pages/SpotlightPage.vue";
+import SnippetVariableDialog from "./SnippetVariableDialog.vue";
+import WorkflowVariableDialog from "./WorkflowVariableDialog.vue";
 import { bindLocaleSync } from "@/i18n";
 import { initTheme } from "@/lib/workhub/theme";
 import { setWindowLabel } from "@/lib/workhub/windowActions";
 import { inTauri } from "@/lib/workhub/db";
-import { loadSettings } from "@/lib/workhub/settingsStore";
+import { bindAllowShellSync, loadSettings } from "@/lib/workhub/settingsStore";
+import { bindWorkflowHotkeyRunner } from "@/lib/workhub/workflowHotkeys";
 
 const { t, locale } = useI18n();
 
 let unbindLocale: (() => void) | undefined;
+let unbindAllowShell: (() => void) | undefined;
+let unbindWorkflowHotkeys: (() => void) | undefined;
 
 async function applyWindowTitle() {
   if (!inTauri()) return;
@@ -27,6 +32,8 @@ onMounted(async () => {
   initTheme();
   await loadSettings();
   unbindLocale = await bindLocaleSync();
+  unbindAllowShell = await bindAllowShellSync();
+  unbindWorkflowHotkeys = await bindWorkflowHotkeyRunner();
   await applyWindowTitle();
   if (inTauri()) {
     const { getCurrentWindow } = await import("@tauri-apps/api/window");
@@ -45,9 +52,13 @@ watch(locale, () => {
 
 onUnmounted(() => {
   unbindLocale?.();
+  unbindAllowShell?.();
+  unbindWorkflowHotkeys?.();
 });
 </script>
 
 <template>
   <SpotlightPage />
+  <SnippetVariableDialog />
+  <WorkflowVariableDialog />
 </template>

@@ -47,3 +47,23 @@ commands.allow = ["apply_startup_window", "sync_default_window_mode"]
 identifier = "allow-shortcut-reload"
 description = "允许重新注册全局快捷键"
 commands.allow = ["shortcut_reload"]
+
+[[permission]]
+identifier = "allow-git-status"
+description = "允许读取 Git 仓库状态（只读）"
+commands.allow = ["git_repo_status", "git_repo_branches"]
+
+[[permission]]
+identifier = "allow-run-shell"
+description = "允许工作流执行 shell 命令"
+commands.allow = ["run_shell_command"]
+
+[[permission]]
+identifier = "allow-workflow-shortcuts"
+description = "允许注册工作流全局快捷键"
+commands.allow = ["workflow_shortcuts_reload"]
+
+[[permission]]
+identifier = "allow-db-checkpoint"
+description = "允许关机/退出前刷盘数据库"
+commands.allow = ["db_checkpoint"]

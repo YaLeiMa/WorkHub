@@ -32,6 +32,13 @@ import {
   openUrl,
   pickDocument,
 } from "@/lib/workhub/actions";
+import {
+  fetchGitStatus,
+  gitStatusStore,
+} from "@/lib/workhub/gitStatus";
+import { gitCompareUrl } from "@/lib/workhub/gitUrls";
+import { isShellExecutionAllowed } from "@/lib/workhub/settingsStore";
+import { inTauri } from "@/lib/workhub/db";
 import { toast } from "@/lib/workhub/toast";
 
 const { t: $t } = useI18n();
@@ -39,6 +46,97 @@ const { t: $t } = useI18n();
 const props = defineProps<{ id: string }>();
 
 const project = computed(() => getProject(props.id));
+
+const gitStatus = computed(() =>
+  project.value ? gitStatusStore.byProjectId[project.value.id] : undefined,
+);
+
+const gitQuickCommands = [
+  { id: "status", command: "git status" },
+  { id: "pull", command: "git pull" },
+  { id: "fetch", command: "git fetch" },
+  { id: "push", command: "git push" },
+  { id: "stash", command: "git stash push -m \"WIP\"" },
+  { id: "log", command: "git log -5 --oneline" },
+] as const;
+
+const prCompareUrl = computed(() => {
+  const p = project.value;
+  const branch = gitStatus.value?.branch;
+  if (!p?.gitUrl || !branch) return null;
+  return gitCompareUrl(p.gitUrl, branch);
+});
+
+async function refreshGit() {
+  const p = project.value;
+  if (!p?.path) return;
+  await fetchGitStatus(p.id, p.path);
+}
+
+async function onGitCommand(e: MouseEvent, command: string) {
+  if (e.ctrlKey || e.metaKey) {
+    await runGitCommand(command);
+    return;
+  }
+  await copyText(command, $t("toast.copied"));
+}
+
+async function runGitCommand(command: string) {
+  const p = project.value;
+  if (!p?.path) return;
+  if (!inTauri()) {
+    toast.error($t("project.detail.gitShellDesktopOnly"));
+    return;
+  }
+  if (!(await isShellExecutionAllowed())) {
+    toast.error($t("project.detail.gitShellDisabled"));
+    return;
+  }
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const result = await invoke<{
+      exitCode: number;
+      stdout: string;
+      stderr: string;
+      success: boolean;
+    }>("run_shell_command", {
+      command,
+      cwd: p.path,
+      timeoutMs: 120_000,
+    });
+    const output = (result.stdout.trim() || result.stderr.trim());
+    if (output) {
+      await copyText(output, $t("project.detail.gitOutputCopied"));
+    } else if (result.success) {
+      toast.success($t("project.detail.gitCommandDone"));
+    } else {
+      toast.error($t("project.detail.gitCommandFailed", { code: result.exitCode }));
+    }
+    await refreshGit();
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    toast.error(msg);
+  }
+}
+
+function openPrCompare() {
+  const url = prCompareUrl.value;
+  if (!url) return;
+  void openUrl(url, {
+    kind: "link",
+    refId: project.value!.id,
+    title: $t("project.detail.gitOpenPr"),
+    subtitle: url,
+  });
+}
+
+watch(
+  () => project.value?.path,
+  (path) => {
+    if (project.value && path) void fetchGitStatus(project.value.id, path);
+  },
+  { immediate: true },
+);
 
 onMounted(() => {
   setStatusHint("project.detail.statusHint");
@@ -289,6 +387,54 @@ function confirmDeleteDoc() {
           >
             {{ tag }}
           </span>
+        </div>
+      </div>
+    </Card>
+
+    <Card :title="$t('project.detail.git')">
+      <div v-if="!gitStatus?.hasRepo" class="text-body text-text-placeholder">
+        {{ $t('project.detail.gitNoRepo') }}
+      </div>
+      <div v-else class="flex flex-col gap-3">
+        <div class="grid grid-cols-[88px_1fr] gap-y-2 text-body">
+          <div class="text-text-secondary">{{ $t('project.detail.gitBranch') }}</div>
+          <div class="text-mono text-text">{{ gitStatus.branch ?? "—" }}</div>
+          <div class="text-text-secondary">{{ $t('project.detail.gitStatus') }}</div>
+          <div class="text-text">
+            {{ gitStatus.isDirty ? $t('project.gitDirty') : $t('project.gitClean') }}
+          </div>
+        </div>
+        <div>
+          <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <div class="text-caption text-text-secondary">
+              {{ $t('project.detail.gitQuickCopy') }}
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <Button variant="text" @click="refreshGit()">
+                {{ $t('project.detail.gitRefresh') }}
+              </Button>
+              <Button
+                v-if="prCompareUrl"
+                variant="text"
+                @click="openPrCompare()"
+              >
+                {{ $t('project.detail.gitOpenPr') }}
+              </Button>
+            </div>
+          </div>
+          <p class="mb-2 text-caption text-text-placeholder">
+            {{ $t('project.detail.gitActionHint') }}
+          </p>
+          <div class="flex flex-wrap gap-2">
+            <Button
+              v-for="item in gitQuickCommands"
+              :key="item.id"
+              variant="secondary"
+              @click="onGitCommand($event, item.command)"
+            >
+              {{ item.command }}
+            </Button>
+          </div>
         </div>
       </div>
     </Card>

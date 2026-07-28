@@ -9,11 +9,12 @@ import { reloadWorkhubData } from "./init";
 import { projectsStore } from "./projectsStore";
 import { recentStore } from "./recentStore";
 import { snippetsStore } from "./snippetsStore";
-import type { Favorite, LauncherApp, Project, Snippet, SnippetCategory } from "./types";
+import type { Favorite, LauncherApp, Project, Snippet, SnippetCategory, Workflow } from "./types";
+import { workflowsStore } from "./workflowsStore";
 
 export const WORKHUB_EXPORT_FORMAT = "workhub-backup" as const;
-export const WORKHUB_EXPORT_VERSION = 2;
-const SUPPORTED_EXPORT_VERSIONS = [1, 2] as const;
+export const WORKHUB_EXPORT_VERSION = 3;
+const SUPPORTED_EXPORT_VERSIONS = [1, 2, 3] as const;
 
 const GROUP_ORDER_KEY = "project_group_order";
 const CHILD_ORDER_KEY = "project_group_child_order";
@@ -31,6 +32,7 @@ export type WorkhubExportFile = {
   snippets: Snippet[];
   favorites: Favorite[];
   apps: LauncherApp[];
+  workflows?: Workflow[];
   projectGroupOrder: string[];
   projectGroupChildOrder: Record<string, string[]>;
 };
@@ -77,6 +79,14 @@ function cloneFavorite(f: Favorite): Favorite {
 
 function cloneApp(a: LauncherApp): LauncherApp {
   return { ...a, tags: [...a.tags] };
+}
+
+function cloneWorkflow(w: Workflow): Workflow {
+  return {
+    ...w,
+    tags: [...w.tags],
+    steps: w.steps.map((s) => ({ ...s, config: { ...s.config } })),
+  };
 }
 
 const SNIPPET_CATEGORIES: SnippetCategory[] = [
@@ -201,6 +211,24 @@ function normalizeApp(raw: unknown): LauncherApp | null {
   };
 }
 
+function normalizeWorkflow(raw: unknown): Workflow | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  if (typeof o.id !== "string" || typeof o.title !== "string") return null;
+  const steps = Array.isArray(o.steps) ? o.steps : [];
+  return {
+    id: o.id,
+    title: o.title,
+    description: typeof o.description === "string" ? o.description : "",
+    projectId: typeof o.projectId === "string" ? o.projectId : undefined,
+    tags: parseStringArray(o.tags),
+    favorite: !!o.favorite,
+    hotkey: typeof o.hotkey === "string" ? o.hotkey : undefined,
+    steps: steps.filter((s) => s && typeof s === "object") as Workflow["steps"],
+    updatedAt: Number(o.updatedAt ?? Date.now()),
+  };
+}
+
 function normalizeChildOrder(raw: unknown): Record<string, string[]> {
   if (!raw || typeof raw !== "object") return {};
   const out: Record<string, string[]> = {};
@@ -220,6 +248,7 @@ export function buildExportPayload(): WorkhubExportFile {
     snippets: snippetsStore.list.map(cloneSnippet),
     favorites: favoritesStore.list.map(cloneFavorite),
     apps: appsStore.list.map(cloneApp),
+    workflows: workflowsStore.list.map(cloneWorkflow),
     projectGroupOrder: [...projectsStore.groupOrder],
     projectGroupChildOrder: { ...projectsStore.childGroupOrder },
   };
@@ -240,7 +269,7 @@ export function parseExportFile(text: string): WorkhubExportFile {
     throw new Error("不是 WorkHub 备份文件");
   }
   const version = Number(o.version);
-  if (!SUPPORTED_EXPORT_VERSIONS.includes(version as 1 | 2)) {
+  if (!SUPPORTED_EXPORT_VERSIONS.includes(version as 1 | 2 | 3)) {
     throw new Error(`不支持的备份版本：${String(o.version)}`);
   }
 
@@ -257,6 +286,10 @@ export function parseExportFile(text: string): WorkhubExportFile {
     version >= 2 && Array.isArray(o.apps)
       ? o.apps.map(normalizeApp).filter((a): a is LauncherApp => !!a)
       : [];
+  const workflows =
+    version >= 3 && Array.isArray(o.workflows)
+      ? o.workflows.map(normalizeWorkflow).filter((w): w is Workflow => !!w)
+      : [];
 
   return {
     format: WORKHUB_EXPORT_FORMAT,
@@ -266,6 +299,7 @@ export function parseExportFile(text: string): WorkhubExportFile {
     snippets,
     favorites,
     apps,
+    workflows,
     projectGroupOrder: parseStringArray(o.projectGroupOrder),
     projectGroupChildOrder: normalizeChildOrder(o.projectGroupChildOrder),
   };
@@ -390,6 +424,29 @@ async function insertAppRow(
   );
 }
 
+async function insertWorkflowRow(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  w: Workflow,
+) {
+  await db.execute(
+    `INSERT INTO workflows
+      (id,title,description,project_id,tags,is_favorite,steps,hotkey,created_at,updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+    [
+      w.id,
+      w.title,
+      w.description,
+      w.projectId ?? null,
+      JSON.stringify(w.tags),
+      w.favorite ? 1 : 0,
+      JSON.stringify(w.steps),
+      w.hotkey ?? null,
+      w.updatedAt,
+      w.updatedAt,
+    ],
+  );
+}
+
 function applyToMemory(payload: WorkhubExportFile) {
   projectsStore.list = payload.projects.map(cloneProject);
   projectsStore.groupOrder = [...payload.projectGroupOrder];
@@ -397,6 +454,7 @@ function applyToMemory(payload: WorkhubExportFile) {
   snippetsStore.list = payload.snippets.map(cloneSnippet);
   favoritesStore.list = payload.favorites.map(cloneFavorite);
   appsStore.list = payload.apps.map(cloneApp);
+  workflowsStore.list = (payload.workflows ?? []).map(cloneWorkflow);
   recentStore.list = [];
 }
 
@@ -411,12 +469,14 @@ async function persistPayload(payload: WorkhubExportFile) {
   await db.execute("DELETE FROM snippets");
   await db.execute("DELETE FROM favorites");
   await db.execute("DELETE FROM launcher_apps");
+  await db.execute("DELETE FROM workflows");
   await db.execute("DELETE FROM recents");
 
   for (const p of payload.projects) await insertProjectRow(db, p);
   for (const s of payload.snippets) await insertSnippetRow(db, s);
   for (const f of payload.favorites) await insertFavoriteRow(db, f);
   for (const a of payload.apps) await insertAppRow(db, a);
+  for (const w of payload.workflows ?? []) await insertWorkflowRow(db, w);
 
   await setMeta(db, GROUP_ORDER_KEY, JSON.stringify(payload.projectGroupOrder));
   await setMeta(
@@ -490,6 +550,7 @@ export async function resetFactoryData(): Promise<void> {
       snippets: mockSnippets.map(cloneSnippet),
       favorites: mockFavorites.map(cloneFavorite),
       apps: [],
+      workflows: [],
       projectGroupOrder: [],
       projectGroupChildOrder: {},
     });
@@ -502,6 +563,7 @@ export async function resetFactoryData(): Promise<void> {
   await db.execute("DELETE FROM snippets");
   await db.execute("DELETE FROM favorites");
   await db.execute("DELETE FROM launcher_apps");
+  await db.execute("DELETE FROM workflows");
   await db.execute("DELETE FROM recents");
   await db.execute("DELETE FROM clipboard_history");
   await db.execute("DELETE FROM snippet_variable_values");

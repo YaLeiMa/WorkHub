@@ -108,6 +108,8 @@ export function resolveItemIcon(
       return { mode: "glyph", name: "app", tint: "#7C3AED" };
     case "tool":
       return { mode: "glyph", name: "tool", tint: "#2BA471" };
+    case "workflow":
+      return { mode: "glyph", name: "command", tint: "#2BA471" };
     default:
       return { mode: "glyph", name: "file" };
   }
