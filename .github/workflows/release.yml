@@ -71,7 +71,22 @@ jobs:
 
       - name: Build Tauri app (Windows, fast CI profile)
         if: matrix.platform == 'windows-latest'
-        run: npx tauri build
+        shell: bash
+        run: |
+          set -euo pipefail
+          # NSIS download from GitHub can fail with `io: Peer disconnected`.
+          # Cargo is incremental after the first compile, so retries are cheap.
+          for attempt in 1 2 3; do
+            echo "Windows tauri build attempt ${attempt}/3"
+            if npx tauri build; then
+              exit 0
+            fi
+            echo "Windows tauri build failed on attempt ${attempt}"
+            if [ "${attempt}" -eq 3 ]; then
+              exit 1
+            fi
+            sleep $((attempt * 10))
+          done
         env:
           CI: true
           CARGO_PROFILE_RELEASE_LTO: "false"
