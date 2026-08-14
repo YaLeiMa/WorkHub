@@ -1,0 +1,81 @@
+:root {
+  color-scheme: light;
+  --bg: #f4f4f5;
+  --panel: #ffffff;
+  --text: #18181b;
+  --muted: #71717a;
+  --line: #e4e4e7;
+  --user: #18181b;
+  --bot: #3f3f46;
+  --err: #b42318;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  height: 100%;
+  font: 14px/1.5 system-ui, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+body {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+}
+header {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+h1 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+.status { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
+.status.bad { color: var(--err); }
+.status.ok { color: #067647; }
+#log {
+  overflow: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.msg {
+  max-width: 80%;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.msg.user { align-self: flex-end; background: var(--user); color: #fff; border-color: var(--user); }
+.msg.assistant { align-self: flex-start; color: var(--bot); }
+.msg.system { align-self: center; color: var(--err); background: #fff; font-size: 13px; }
+.msg .who { display: block; font-size: 11px; opacity: 0.7; margin-bottom: 4px; }
+#composer {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  padding: 12px;
+  border-top: 1px solid var(--line);
+  background: var(--panel);
+}
+textarea {
+  resize: none;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: inherit;
+}
+button {
+  min-width: 72px;
+  border: 0;
+  border-radius: 8px;
+  background: #18181b;
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+button:disabled { opacity: 0.5; cursor: default; }

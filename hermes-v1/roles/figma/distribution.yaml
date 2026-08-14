@@ -1,0 +1,10 @@
+name: figma
+version: 0.20.0
+description: "Figma ui设计"
+hermes_requires: ">=0.20.0"
+author: "YaLeiMa"
+license: "MIT"
+distribution_owned:
+  - SOUL.md
+  - config.yaml
+  - distribution.yaml

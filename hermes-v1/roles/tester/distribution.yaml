@@ -1,0 +1,10 @@
+name: tester
+version: 0.20.0
+description: "测试工程师"
+hermes_requires: ">=0.20.0"
+author: "YaLeiMa"
+license: "MIT"
+distribution_owned:
+  - SOUL.md
+  - config.yaml
+  - distribution.yaml

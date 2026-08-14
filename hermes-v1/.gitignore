@@ -1,0 +1,10 @@
+auth.json
+.env
+state.db
+memories/
+sessions/
+logs/
+electron/node_modules/
+electron/config.local.json
+electron/dist/
+electron/out/

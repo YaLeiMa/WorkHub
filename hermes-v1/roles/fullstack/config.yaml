@@ -1,0 +1,6 @@
+# Hermes 0.20 产品层同事 profile。
+# 不写密钥、不写机器 IP。模型 key 仍在本 profile 的 .env。
+# kanban 需显式列入；all/* 不会打开看板工具。
+toolsets:
+  - hermes-cli
+  - kanban

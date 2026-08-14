@@ -1,0 +1,12 @@
+# Hermes 0.20 产品层：群入口 / 路由（default profile）。
+# 不写密钥、不写机器 IP。模型 key 仍在本 profile 的 .env。
+toolsets:
+  - hermes-cli
+  - kanban
+gateway:
+  multiplex_profiles: true
+kanban:
+  dispatch_in_gateway: true
+  orchestrator_profile: default
+  auto_decompose: false
+  auto_subscribe_on_create: true

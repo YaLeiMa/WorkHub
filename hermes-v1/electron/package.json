@@ -1,0 +1,14 @@
+{
+  "name": "hermes-v1-shell",
+  "version": "0.20.0",
+  "private": true,
+  "description": "Thin remote chat window for the host Hermes gateway. Does not run hermes locally.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test lib/host.test.js"
+  },
+  "devDependencies": {
+    "electron": "^33.4.0"
+  }
+}

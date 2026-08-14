@@ -1,0 +1,11 @@
+name: default
+version: 0.20.0
+description: "群入口 / 路由"
+hermes_requires: ">=0.20.0"
+author: "YaLeiMa"
+license: "MIT"
+distribution_owned:
+  - SOUL.md
+  - config.yaml
+  - skills/
+  - distribution.yaml
