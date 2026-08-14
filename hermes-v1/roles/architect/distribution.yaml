@@ -1,0 +1,10 @@
+name: architect
+version: 0.20.0
+description: "系统架构师"
+hermes_requires: ">=0.20.0"
+author: "YaLeiMa"
+license: "MIT"
+distribution_owned:
+  - SOUL.md
+  - config.yaml
+  - distribution.yaml

@@ -1,0 +1,10 @@
+name: pm
+version: 0.20.0
+description: "产品经理"
+hermes_requires: ">=0.20.0"
+author: "YaLeiMa"
+license: "MIT"
+distribution_owned:
+  - SOUL.md
+  - config.yaml
+  - distribution.yaml

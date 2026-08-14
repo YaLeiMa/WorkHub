@@ -1,0 +1,8 @@
+# 合并进现有主机 ~/.hermes/config.yaml。不写 IP/主机名。
+gateway:
+  multiplex_profiles: true
+kanban:
+  dispatch_in_gateway: true
+  orchestrator_profile: default
+  auto_decompose: false
+  auto_subscribe_on_create: true
