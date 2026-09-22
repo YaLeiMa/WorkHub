@@ -20,22 +20,30 @@ pub fn window_set_always_on_top(app: AppHandle, always_on_top: bool) -> Result<(
 /// 用 VSCode 打开指定路径（执行 `code <path>`）。
 /// Windows 下 `code` 实为 `code.cmd`，需经 `cmd /C` 调用；
 /// WorkHub 自身是无控制台的 GUI 进程，必须带 CREATE_NO_WINDOW，否则每调一次就闪一个黑框。
+///
+/// 注意：这里必须用 `#[cfg]` 属性分平台，不能用 `cfg!(...)` —— 后者是运行时布尔值，
+/// 两个分支在所有平台上都要参与编译，macOS/Linux 上会因找不到 `std::os::windows` 而编译失败。
 #[tauri::command]
 pub fn open_in_vscode(path: String) -> Result<(), String> {
-    let spawn = if cfg!(target_os = "windows") {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-        Command::new("cmd")
-            .args(["/C", "code", &path])
-            .creation_flags(CREATE_NO_WINDOW)
-            .spawn()
-    } else {
-        Command::new("code").arg(&path).spawn()
-    };
-
-    spawn
+    spawn_vscode(&path)
         .map(|_| ())
         .map_err(|_| "未检测到 VSCode，请先安装或配置 code 命令".to_string())
+}
+
+#[cfg(target_os = "windows")]
+fn spawn_vscode(path: &str) -> std::io::Result<std::process::Child> {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+    Command::new("cmd")
+        .args(["/C", "code", path])
+        .creation_flags(CREATE_NO_WINDOW)
+        .spawn()
+}
+
+#[cfg(not(target_os = "windows"))]
+fn spawn_vscode(path: &str) -> std::io::Result<std::process::Child> {
+    Command::new("code").arg(path).spawn()
 }
 
 /// 隐藏主窗口到托盘（Esc / 关闭按钮调用）。

@@ -9,6 +9,8 @@ use serde::Serialize;
 
 use crate::startup_log;
 
+/// 只在 Windows 上使用；用 `#[cfg]` 而不是 `cfg!`，避免非 Windows 目标编译到 Windows API
+#[cfg(target_os = "windows")]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 const DEFAULT_TIMEOUT_MS: u64 = 30_000;
 const MAX_TIMEOUT_MS: u64 = 600_000;
