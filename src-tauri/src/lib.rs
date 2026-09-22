@@ -284,6 +284,9 @@ pub fn run() {
             git_status::git_repo_status,
             git_status::git_repo_branches,
             shell_command::run_shell_command,
+            shell_command::shell_run_list,
+            shell_command::shell_run_stop,
+            shell_command::shell_run_stop_all,
             workflow_shortcut::workflow_shortcuts_reload,
             db_maintenance::db_checkpoint,
         ])
@@ -325,6 +328,7 @@ pub fn run() {
     app.run(|_app, event| {
         match event {
             tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit => {
+                shell_command::stop_all_on_exit();
                 db_maintenance::checkpoint_on_exit();
             }
             _ => {}
@@ -335,6 +339,11 @@ pub fn run() {
 
 #[cfg(windows)]
 fn show_fatal_dialog(message: &str) {
+    use std::os::windows::process::CommandExt;
+
+    // 用 GUI 弹窗而不是控制台窗口：必须带 CREATE_NO_WINDOW，否则会闪一个黑框
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
     let log_hint = startup_log::log_file_path()
         .map(|p| format!("\n\n日志：{}", p.display()))
         .unwrap_or_default();
@@ -345,6 +354,7 @@ fn show_fatal_dialog(message: &str) {
     );
     let _ = std::process::Command::new("powershell")
         .args(["-NoProfile", "-NonInteractive", "-Command", &ps])
+        .creation_flags(CREATE_NO_WINDOW)
         .spawn();
 }
 

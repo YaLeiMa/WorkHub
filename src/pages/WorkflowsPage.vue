@@ -19,6 +19,14 @@ import {
   workflowsStore,
 } from "@/lib/workhub/workflowsStore";
 import { getProject } from "@/lib/workhub/projectsStore";
+import {
+  openShellRunLog,
+  refreshShellRuns,
+  shellRunsStore,
+  shellRunTitle,
+  stopAllShellRuns,
+  stopShellRun,
+} from "@/lib/workhub/shellRuns";
 import type { Workflow } from "@/lib/workhub/types";
 
 const { t } = useI18n();
@@ -109,9 +117,43 @@ async function confirmDelete() {
   toast.success(t("workflow.deleted"));
 }
 
+/* ---------- 后台命令（工作流「后台常驻运行」启动的服务） ---------- */
+const stoppingId = ref<string | null>(null);
+
+async function stopRun(run: { id: string; pid: number }) {
+  if (stoppingId.value) return;
+  stoppingId.value = run.id;
+  try {
+    const stopped = await stopShellRun(run.id);
+    if (stopped) {
+      toast.success(t("workflow.background.stopped", { pid: String(run.pid) }));
+    } else {
+      toast.error(t("workflow.background.stopFailed"));
+    }
+  } finally {
+    stoppingId.value = null;
+  }
+}
+
+async function stopAllRuns() {
+  const count = await stopAllShellRuns();
+  if (count > 0) {
+    toast.success(t("workflow.background.allStopped", { n: String(count) }));
+  } else {
+    await refreshShellRuns();
+  }
+}
+
+function openLog(path?: string | null) {
+  if (!path) return;
+  void openShellRunLog(path);
+}
+
 onMounted(() => {
   setStatusHint("workflow.list.statusHint");
   window.addEventListener("keydown", onKey);
+  // 轮询由 Shell.vue 统一负责，这里只保证进页面时数据是新的
+  void refreshShellRuns();
 });
 
 onUnmounted(() => {
@@ -131,6 +173,74 @@ onUnmounted(() => {
           {{ t("workflow.add") }}
         </Button>
       </div>
+    </div>
+
+    <div class="rounded-[var(--radius-md)] border border-border bg-surface p-3">
+      <div class="mb-2 flex items-center justify-between gap-3">
+        <span class="text-body text-text">
+          {{ t("workflow.background.title") }}
+          <span class="text-caption text-text-secondary">({{ shellRunsStore.list.length }})</span>
+        </span>
+        <button
+          v-if="shellRunsStore.list.length > 0"
+          type="button"
+          class="h-7 shrink-0 rounded-[var(--radius-sm)] px-2 text-caption text-text-secondary hover:bg-surface-hover"
+          @click="stopAllRuns"
+        >
+          {{ t("workflow.background.stopAll") }}
+        </button>
+      </div>
+      <p
+        v-if="shellRunsStore.list.length === 0"
+        class="text-caption text-text-secondary"
+      >
+        {{ t("workflow.background.empty") }}
+      </p>
+      <div
+        v-for="run in shellRunsStore.list"
+        :key="run.id"
+        class="flex items-center gap-2 py-1"
+      >
+        <span
+          class="shrink-0 rounded-[var(--radius-sm)] px-1.5 text-[10px] leading-5"
+          :class="run.background ? 'bg-success/10 text-success' : 'bg-surface-hover text-text-secondary'"
+        >
+          {{ run.background ? t("workflow.background.tagBackground") : t("workflow.background.tagForeground") }}
+        </span>
+        <span
+          class="max-w-[38%] shrink-0 truncate text-caption text-text"
+          :title="shellRunTitle(run)"
+        >{{ shellRunTitle(run) }}</span>
+        <span
+          class="min-w-0 flex-1 truncate text-caption text-text-secondary"
+          :title="run.command"
+        >{{ run.command }}</span>
+        <span class="shrink-0 text-caption text-text-secondary">
+          {{ t("workflow.background.pid", { pid: String(run.pid) }) }}
+        </span>
+        <button
+          v-if="run.logPath"
+          type="button"
+          class="h-7 shrink-0 rounded-[var(--radius-sm)] px-2 text-caption text-text-secondary hover:bg-surface-hover"
+          @click="openLog(run.logPath)"
+        >
+          {{ t("workflow.background.log") }}
+        </button>
+        <button
+          type="button"
+          class="h-7 shrink-0 rounded-[var(--radius-sm)] px-2 text-caption text-danger hover:bg-danger/10 disabled:opacity-50"
+          :disabled="stoppingId === run.id"
+          @click="stopRun(run)"
+        >
+          {{ t("workflow.background.stop") }}
+        </button>
+      </div>
+      <p
+        v-if="shellRunsStore.list.length > 0"
+        class="mt-1 text-caption text-text-secondary"
+      >
+        {{ t("workflow.background.hint") }}
+      </p>
     </div>
 
     <SearchBox v-model="q" :placeholder="t('workflow.searchPlaceholder')" />

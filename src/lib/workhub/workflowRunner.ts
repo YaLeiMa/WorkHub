@@ -113,18 +113,28 @@ async function runShellStep(
   const cwd = cfg.useProjectPath
     ? resolveProjectPath(workflow, cfg, variables)
     : interpolate(String(cfg.cwd ?? ""), workflow, variables) || undefined;
+  const background = cfg.background === true;
+  // 列表里显示的名称：「工作流名 · 步骤标题」，步骤没写标题就只用工作流名
+  const stepTitle = (step.title ?? "").trim();
+  const runName = stepTitle ? `${workflow.title} · ${stepTitle}` : workflow.title;
   const { invoke } = await import("@tauri-apps/api/core");
   let result: {
     exitCode: number;
     stdout: string;
     stderr: string;
     success: boolean;
+    background?: boolean;
+    runId?: string | null;
+    pid?: number | null;
+    logPath?: string | null;
   };
   try {
     result = await invoke("run_shell_command", {
       command,
       cwd: cwd || null,
       timeoutMs: Number(cfg.timeoutMs ?? 30_000),
+      background,
+      name: runName,
     });
   } catch (e) {
     const msg =
@@ -135,6 +145,16 @@ async function runShellStep(
           : t("workflow.errors.stepFailed");
     throw new WorkflowRunError(msg, step.id, stepLabel(step));
   }
+
+  // 后台常驻：进程已托管在 Rust 侧，可在工作流页「后台命令」里停止
+  if (result.background) {
+    const { refreshShellRuns } = await import("./shellRuns");
+    await refreshShellRuns();
+    const pid = String(result.pid ?? "?");
+    toast.success(t("workflow.background.started", { pid }));
+    return t("workflow.background.running", { command });
+  }
+
   if (!result.success && !step.continueOnError) {
     throw new WorkflowRunError(
       result.stderr.trim() || t("workflow.errors.shellExit", { code: result.exitCode }),

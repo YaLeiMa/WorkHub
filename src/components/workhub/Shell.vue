@@ -27,6 +27,11 @@ import { applyDesktopPreferences, bindAllowShellSync, loadSettings, settingsStor
 import { bindWorkflowHotkeyRunner } from "@/lib/workhub/workflowHotkeys";
 import { inTauri } from "@/lib/workhub/db";
 import { getAppVersion, appUpdateStore, refreshAppUpdateStatus } from "@/lib/workhub/appUpdate";
+import {
+  shellRunsStore,
+  startShellRunsPolling,
+  stopShellRunsPolling,
+} from "@/lib/workhub/shellRuns";
 
 type IconName = "home" | "project" | "snippet" | "star" | "link" | "settings" | "clipboard" | "app" | "tool" | "command";
 
@@ -198,10 +203,13 @@ onMounted(() => {
   })();
   void bindGlobalTauriEvents();
   window.addEventListener("keydown", onWindowKey);
+  // 全局轮询后台命令：侧边栏角标 + 工作流页列表共用同一份数据
+  startShellRunsPolling();
 });
 
 onUnmounted(() => {
   window.removeEventListener("keydown", onWindowKey);
+  stopShellRunsPolling();
   if (inTauri()) {
     window.removeEventListener("beforeunload", flushDatabase);
   }
@@ -294,6 +302,11 @@ onUnmounted(() => {
             class="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-primary"
             :aria-label="t('settings.updateAvailableNav')"
           />
+          <span
+            v-if="item.to === '/workflows' && shellRunsStore.list.length > 0"
+            class="absolute right-1 top-1 min-w-[14px] rounded-full bg-success px-1 text-center text-[9px] leading-[14px] text-white"
+            :aria-label="t('workflow.background.title')"
+          >{{ shellRunsStore.list.length }}</span>
           <span
             class="self-stretch min-w-0 truncate px-0.5 text-center text-[10px] leading-none"
           >{{ item.label }}</span>

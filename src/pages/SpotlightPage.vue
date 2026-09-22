@@ -15,6 +15,14 @@ import { loadSettings, settingsStore } from "@/lib/workhub/settingsStore";
 import { inTauri } from "@/lib/workhub/db";
 import { snippetCopyState } from "@/lib/workhub/snippetCopy";
 import { triggerListCopy } from "@/lib/workhub/listKeys";
+import {
+  refreshShellRuns,
+  shellRunsStore,
+  shellRunTitle,
+  stopAllShellRuns,
+  stopShellRun,
+} from "@/lib/workhub/shellRuns";
+import { toast } from "@/lib/workhub/toast";
 import { useI18n } from "vue-i18n";
 
 const { t } = useI18n();
@@ -35,6 +43,53 @@ const { q, debounced, searchScope, hasSearchInput, sel, hits, grouped, displayHi
 const activeTool = computed(() => getTool(activeToolId.value));
 const showResults = computed(() => hasSearchInput.value && !activeTool.value);
 const list = computed<SearchRow[]>(() => displayHits.value);
+
+/* ---------- 后台命令：悬浮窗空闲时直接摊开，方便随手关掉 ---------- */
+const runs = computed(() => shellRunsStore.list);
+const runSel = ref(0);
+const stoppingId = ref<string | null>(null);
+const runsRef = ref<HTMLElement | null>(null);
+
+const showRuns = computed(
+  () =>
+    dataReady.value &&
+    !activeTool.value &&
+    !hasSearchInput.value &&
+    runs.value.length > 0,
+);
+
+watch(
+  () => runs.value.length,
+  (len) => {
+    if (runSel.value >= len) runSel.value = Math.max(0, len - 1);
+  },
+);
+
+async function stopRun(run: { id: string; pid: number }) {
+  if (stoppingId.value) return;
+  stoppingId.value = run.id;
+  try {
+    const stopped = await stopShellRun(run.id);
+    if (stopped) {
+      toast.success(
+        t("workflow.background.stopped", { pid: String(run.pid) }),
+      );
+    } else {
+      toast.error(t("workflow.background.stopFailed"));
+    }
+  } finally {
+    stoppingId.value = null;
+  }
+}
+
+async function stopEveryRun() {
+  const count = await stopAllShellRuns();
+  if (count > 0) {
+    toast.success(t("workflow.background.allStopped", { n: String(count) }));
+  } else {
+    await refreshShellRuns();
+  }
+}
 
 let unlistenFocus: (() => void) | undefined;
 let unlistenWinFocus: (() => void) | undefined;
@@ -69,12 +124,17 @@ async function applySpotlightSize() {
   let size: InstanceType<typeof LogicalSize>;
   if (activeTool.value) size = new LogicalSize(TOOL_W, TOOL_H);
   else if (showResults.value) size = new LogicalSize(RESULTS_W, RESULTS_H);
+  else if (showRuns.value)
+    size = new LogicalSize(
+      RESULTS_W,
+      Math.min(440, SEARCH_H + 36 + runs.value.length * 32 + 18),
+    );
   else size = new LogicalSize(SEARCH_W, SEARCH_H);
   await win.setSize(size);
   await win.center();
 }
 
-watch([showResults, activeTool], () => {
+watch([showResults, activeTool, showRuns], () => {
   void applySpotlightSize();
 });
 
@@ -97,6 +157,25 @@ async function runRowAction(
 
 function onKey(e: KeyboardEvent) {
   if (snippetCopyState.open) return;
+  // 后台命令面板显示时：↑↓ 选择、Enter 停止这一条
+  if (showRuns.value) {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      handleListArrowDown(runSel, runsRef.value, runs.value.length);
+      return;
+    }
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      handleListArrowUp(runSel, runsRef.value, runs.value.length);
+      return;
+    }
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const cur = runs.value[runSel.value];
+      if (cur) void stopRun(cur);
+      return;
+    }
+  }
   if (e.key === "Escape") {
     e.preventDefault();
     if (q.value) {
@@ -159,7 +238,10 @@ async function bindFocusEvents() {
   });
   const { getCurrentWindow } = await import("@tauri-apps/api/window");
   unlistenWinFocus = await getCurrentWindow().onFocusChanged(({ payload }) => {
-    if (payload) void refreshDataIfReady();
+    if (payload) {
+      void refreshDataIfReady();
+      void refreshShellRuns();
+    }
   });
 }
 
@@ -169,6 +251,7 @@ onMounted(() => {
   void (async () => {
     await initWorkhubData();
     await loadSettings();
+    void refreshShellRuns();
     dataReady.value = true;
     await nextTick();
     await applySpotlightSize();
@@ -252,6 +335,65 @@ onUnmounted(() => {
     </template>
 
     <div
+      v-if="showRuns"
+      ref="runsRef"
+      class="scroll-y min-h-0 flex-1 px-2 pb-1"
+    >
+      <div class="flex items-center justify-between gap-3 px-1 py-1">
+        <span class="text-caption text-text">
+          {{ t("workflow.background.title") }}
+          <span class="text-text-secondary">({{ runs.length }})</span>
+        </span>
+        <button
+          type="button"
+          class="h-6 shrink-0 rounded-[var(--radius-sm)] px-1.5 text-[10px] text-text-secondary hover:bg-surface-hover"
+          @mousedown.stop
+          @click="stopEveryRun"
+        >
+          {{ t("workflow.background.stopAll") }}
+        </button>
+      </div>
+      <div
+        v-for="(run, i) in runs"
+        :key="run.id"
+        :data-i="i"
+        class="flex items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1"
+        :class="i === runSel ? 'bg-surface-active' : 'hover:bg-surface-hover'"
+        @mouseenter="runSel = i"
+      >
+        <span
+          class="shrink-0 rounded-[var(--radius-sm)] px-1.5 text-[10px] leading-5"
+          :class="run.background ? 'bg-success/10 text-success' : 'bg-surface-hover text-text-secondary'"
+        >
+          {{ run.background ? t("workflow.background.tagBackground") : t("workflow.background.tagForeground") }}
+        </span>
+        <span
+          class="max-w-[42%] shrink-0 truncate text-caption text-text"
+          :title="shellRunTitle(run)"
+        >{{ shellRunTitle(run) }}</span>
+        <span
+          class="min-w-0 flex-1 truncate text-caption text-text-secondary"
+          :title="run.command"
+        >{{ run.command }}</span>
+        <span class="shrink-0 text-[10px] text-text-secondary">
+          {{ t("workflow.background.pid", { pid: String(run.pid) }) }}
+        </span>
+        <button
+          type="button"
+          class="h-6 shrink-0 rounded-[var(--radius-sm)] px-2 text-caption text-danger hover:bg-danger/10 disabled:opacity-50"
+          :disabled="stoppingId === run.id"
+          @mousedown.stop
+          @click.stop="stopRun(run)"
+        >
+          {{ t("workflow.background.stop") }}
+        </button>
+      </div>
+      <p class="px-1 pt-1 text-[10px] text-text-secondary">
+        {{ t("workflow.background.spotlightHint") }}
+      </p>
+    </div>
+
+    <div
       v-if="showResults"
       ref="listRef"
       class="scroll-y min-h-0 flex-1 px-2 py-2"
@@ -273,7 +415,11 @@ onUnmounted(() => {
       class="shrink-0 bg-[color-mix(in_oklab,var(--color-surface-hover)_45%,transparent)] px-3 py-1 text-[10px] leading-snug text-text-secondary"
     >
       <div class="flex items-center justify-between gap-3 whitespace-nowrap">
-        <span class="min-w-0 truncate">{{ t("home.spotlightStatusHint") }}</span>
+        <span class="min-w-0 truncate">{{
+          runs.length > 0
+            ? t("home.spotlightRunsHint", { n: String(runs.length) })
+            : t("home.spotlightStatusHint")
+        }}</span>
         <span class="shrink-0 tabular-nums">{{
           t("home.spotlightHotkeySummon", { key: settingsStore.spotlightHotkey })
         }}</span>

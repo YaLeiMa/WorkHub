@@ -50,7 +50,9 @@ pub fn workflow_shortcuts_reload(
         app.global_shortcut()
             .on_shortcut(sc.clone(), move |_app, _shortcut, event| {
                 if event.state() == ShortcutState::Pressed {
-                    let _ = handle.emit("workhub:run-workflow", wf_id.clone());
+                    // 只投递给主窗口：主窗口与 Spotlight 都监听了这个事件，
+                    // 广播会导致按一次快捷键把工作流跑两遍（两个 DSH / 两个 npm start）。
+                    let _ = handle.emit_to("main", "workhub:run-workflow", wf_id.clone());
                 }
             })
             .map_err(|e| format!("注册快捷键 {hotkey} 失败：{e}"))?;

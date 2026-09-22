@@ -55,8 +55,13 @@ commands.allow = ["git_repo_status", "git_repo_branches"]
 
 [[permission]]
 identifier = "allow-run-shell"
-description = "允许工作流执行 shell 命令"
-commands.allow = ["run_shell_command"]
+description = "允许工作流执行 shell 命令，并查看/停止正在运行的命令（含后台常驻）"
+commands.allow = [
+    "run_shell_command",
+    "shell_run_list",
+    "shell_run_stop",
+    "shell_run_stop_all",
+]
 
 [[permission]]
 identifier = "allow-workflow-shortcuts"

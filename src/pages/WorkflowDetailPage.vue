@@ -513,6 +513,21 @@ onUnmounted(() => {
         </label>
         <label class="flex items-center gap-2 text-body text-text">
           <input
+            :checked="!!step.config.background"
+            type="checkbox"
+            class="rounded"
+            @change="step.config.background = ($event.target as HTMLInputElement).checked"
+          />
+          {{ t("workflow.config.backgroundRun") }}
+        </label>
+        <p
+          v-if="step.config.background"
+          class="text-caption text-text-secondary"
+        >
+          {{ t("workflow.config.backgroundRunHint") }}
+        </p>
+        <label class="flex items-center gap-2 text-body text-text">
+          <input
             :checked="step.config.copyOutput !== false"
             type="checkbox"
             class="rounded"

@@ -18,11 +18,17 @@ pub fn window_set_always_on_top(app: AppHandle, always_on_top: bool) -> Result<(
 }
 
 /// 用 VSCode 打开指定路径（执行 `code <path>`）。
-/// Windows 下 `code` 实为 `code.cmd`，需经 `cmd /C` 调用。
+/// Windows 下 `code` 实为 `code.cmd`，需经 `cmd /C` 调用；
+/// WorkHub 自身是无控制台的 GUI 进程，必须带 CREATE_NO_WINDOW，否则每调一次就闪一个黑框。
 #[tauri::command]
 pub fn open_in_vscode(path: String) -> Result<(), String> {
     let spawn = if cfg!(target_os = "windows") {
-        Command::new("cmd").args(["/C", "code", &path]).spawn()
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        Command::new("cmd")
+            .args(["/C", "code", &path])
+            .creation_flags(CREATE_NO_WINDOW)
+            .spawn()
     } else {
         Command::new("code").arg(&path).spawn()
     };
